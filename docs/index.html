@@ -35,8 +35,8 @@
         <select id="f-land"><option value="">Alle Länder</option></select>
       </label>
       <label class="field">
-        <span>Themenbereich</span>
-        <select id="f-thema"><option value="">Alle Themen</option></select>
+        <span>Kategorie</span>
+        <select id="f-cat"><option value="">Alle Kategorien</option></select>
       </label>
       <label class="field">
         <span>Veranstalter</span>
@@ -51,11 +51,15 @@
         <input type="date" id="f-bis">
       </label>
       <label class="field">
-        <span>Dauer: <output id="dauer-out">alle</output></span>
-        <div class="range-pair">
-          <input type="range" id="f-tage-min" min="1" max="15" value="1">
-          <input type="range" id="f-tage-max" min="1" max="15" value="15">
-        </div>
+        <span>Dauer</span>
+        <select id="f-dauer">
+          <option value="">Beliebig</option>
+          <option value="1-2">1–2 Tage</option>
+          <option value="3-3">3 Tage</option>
+          <option value="4-5">4–5 Tage</option>
+          <option value="6-10">6–10 Tage</option>
+          <option value="11-99">Mehr als 10 Tage</option>
+        </select>
       </label>
     </div>
     <div class="filter-row filter-row--meta">
@@ -71,7 +75,7 @@
   <main class="content">
     <div id="mindmap-view">
       <svg id="mindmap"></svg>
-      <div id="mm-hint">Kategorie anklicken = Unterthemen aufklappen · Unterthema anklicken = Veranstaltungen ansehen · gestrichelte Linien = thematische Überschneidung</div>
+      <div id="mm-hint">Thema anklicken = aufklappen · Unterthema anklicken = Veranstaltungen ansehen · gestrichelte Linien = thematische Überschneidung · Ziehen/Scrollen = verschieben/zoomen</div>
       <aside id="mm-panel" hidden>
         <header>
           <strong id="mm-panel-title"></strong>

@@ -1,18 +1,50 @@
-/* Taxonomie für die Mindmap.
-   Ebene 1+2 (Gruppen + Unterkategorien) kommen aus den offiziellen
-   id_stichwort-Kategorien der AWV-Suche (im Scraper getaggt, e.cats).
-   Ebene 3 ("Verfeinerungen") wird hier per Titel-Keywords abgeleitet.
-   Verfeinerungs-Knoten werden zwischen Kategorien geteilt – ein
-   Yoga-Kurs, der unter "Gesundheit" UND "Sonstiges" hängt, verbindet
-   beide Äste sichtbar miteinander. */
+/* Taxonomie für Mindmap und Kategorie-Filter.
+   Die 43 offiziellen id_stichwort-Unterkategorien der AWV-Suche (im
+   Scraper getaggt, e.cats) werden hier zu nutzerfreundlichen Themen-
+   Gruppen gebündelt (z. B. alle Sprachen zusammen). Die dritte Ebene
+   der Mindmap ("Verfeinerungen") wird per Titel-Keywords abgeleitet. */
 "use strict";
 
-const GROUP_META = {
-  bw:   { name: "Berufliche Weiterbildung",            icon: "💼", color: "#b45309" },
-  gp:   { name: "Gesellschaftspolitische Weiterbildung", icon: "🏛️", color: "#c1002a" },
-  ea:   { name: "Ehrenamtliche Tätigkeiten",           icon: "🤝", color: "#16a34a" },
-  none: { name: "Ohne Kategorie",                      icon: "📚", color: "#64748b" },
+/* Thematische Gruppen über den offiziellen Kategorien */
+const CAT_GROUPS = {
+  sprachen: {
+    name: "Sprachen", icon: "🗣️", color: "#2563eb",
+    cats: ["19", "20", "22", "21", "23", "18"],
+  },
+  gesundheit: {
+    name: "Gesundheit & Achtsamkeit", icon: "🧘", color: "#16a34a",
+    cats: ["48"],
+  },
+  beruf: {
+    name: "Beruf & Karriere", icon: "💼", color: "#b45309",
+    cats: ["24", "13", "14", "15", "12", "49", "16", "51", "25"],
+  },
+  digital: {
+    name: "IT & Digitales", icon: "💻", color: "#0891b2",
+    cats: ["17", "52"],
+  },
+  politik: {
+    name: "Politik & Gesellschaft", icon: "🏛️", color: "#c1002a",
+    cats: ["38", "26", "27", "35", "47", "33", "30", "31", "34", "39", "41", "28", "46"],
+  },
+  umwelt: {
+    name: "Umwelt & Natur", icon: "🌿", color: "#4d7c0f",
+    cats: ["36", "50"],
+  },
+  kultur: {
+    name: "Kultur & Bildung", icon: "🎨", color: "#9333ea",
+    cats: ["37"],
+  },
+  ehrenamt: {
+    name: "Ehrenamt", icon: "🤝", color: "#db2777",
+    cats: ["53", "54", "55", "56", "57", "58", "59", "60", "61"],
+  },
 };
+
+const GROUP_OF_CAT = {};
+for (const [gid, g] of Object.entries(CAT_GROUPS)) {
+  for (const cid of g.cats) GROUP_OF_CAT[cid] = gid;
+}
 
 /* Eigene Verfeinerungs-Ebene: Keyword-Buckets über den Titel */
 const REFINE_BUCKETS = [

@@ -4,10 +4,10 @@ Alternatives Frontend für die [Bildungsurlaub-Suche des Landes Rheinland-Pfalz]
 
 **Features**
 
-- 🧠 **Entdecken** (Standard-Ansicht): interaktive Mindmap aller Themen — offizielle Kategorien der AWV-Suche als Äste, per Titel-Keywords verfeinerte Unterthemen (Yoga, KI, Resilienz, …) als geteilte Knoten, gestrichelte Querverbindungen zeigen thematische Überschneidungen; Klick öffnet die Veranstaltungen und übernimmt die Auswahl als Filter in Karte/Liste
+- 🧠 **Entdecken** (Standard-Ansicht): aufklappbare Themen-Mindmap — 8 thematische Gruppen (Sprachen gebündelt, Gesundheit, Beruf, …) → offizielle Kategorien der AWV-Suche → per Titel-Keywords verfeinerte Unterthemen (Yoga, KI, Resilienz, …); gestrichelte Querverbindungen zeigen gleiche Unterthemen in verschiedenen Ästen, Klick öffnet die Veranstaltungen und übernimmt die Auswahl als Filter in Karte/Liste
 - 🗺️ Interaktive Karte (Leaflet + OpenStreetMap) mit Marker-Clustering aller ~6500 anerkannten Veranstaltungen
 - 🔍 Volltextsuche über Titel, Ort und Veranstalter
-- 🎛️ Filter: Region (RLP / anderes Bundesland / Ausland), Land, Themenbereich, Veranstalter, Zeitraum, Dauer (Slider)
+- 🎛️ Filter: Region (RLP / anderes Bundesland / Ausland), Land, alle 43 offiziellen Kategorien (thematisch gruppiert), Veranstalter, Zeitraum, Dauer
 - 🔁 Berücksichtigt Typenanerkennungen (wiederholbare Veranstaltungen)
 - 🔗 Filter landen in der URL → Ansichten sind teilbar
 - 📱 Responsive (mobil: Karte/Liste als Tabs)

@@ -3,12 +3,12 @@
 
 const PAGE_SIZE = 60;
 let DATA = null;          // { groups, categories, organizers, places, events }
-let filtered = [];        // aktuell gefilterte Events (inkl. Kategorie-Auswahl)
-let mmEvents = [];        // wie filtered, aber ohne Kategorie-Auswahl (Basis der Mindmap)
+let filtered = [];        // aktuell gefilterte Events (inkl. Kategorie/Unterthema)
+let mmEvents = [];        // wie filtered, aber ohne Kategorie/Unterthema (Basis der Mindmap)
 let shown = 0;            // Anzahl gerenderter Cards
 let map, cluster;
 let markersByPlace = {};  // "Ort|Land" -> Marker
-let sel = { cat: null, bucket: null, label: "" }; // Auswahl aus der Mindmap
+let sel = { bucket: null, label: "" }; // Unterthema-Auswahl aus der Mindmap
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -64,12 +64,12 @@ function initMap() {
 }
 
 function buildFilterOptions() {
-  const lands = new Map(), themen = new Map(), orgs = new Map();
+  const lands = new Map(), orgs = new Map(), catCounts = new Map();
   for (const e of DATA.events) {
     if (e.land) lands.set(e.land, (lands.get(e.land) || 0) + 1);
-    if (e.thema) themen.set(e.thema, (themen.get(e.thema) || 0) + 1);
     const org = DATA.organizers[e.org];
     if (org && org.name) orgs.set(org.name, (orgs.get(org.name) || 0) + 1);
+    for (const c of e.cats) catCounts.set(c, (catCounts.get(c) || 0) + 1);
   }
   const fill = (sel, entries) => {
     for (const [name, count] of [...entries].sort((a, b) => a[0].localeCompare(b[0], "de"))) {
@@ -80,23 +80,39 @@ function buildFilterOptions() {
     }
   };
   fill($("#f-land"), lands);
-  fill($("#f-thema"), themen);
   fill($("#f-org"), orgs);
+
+  // Kategorie-Dropdown: alle offiziellen Unterkategorien, thematisch gruppiert
+  const catSel = $("#f-cat");
+  for (const ginfo of Object.values(CAT_GROUPS)) {
+    const og = document.createElement("optgroup");
+    og.label = `${ginfo.icon} ${ginfo.name}`;
+    for (const cid of ginfo.cats) {
+      const count = catCounts.get(cid);
+      if (!count) continue;
+      const opt = document.createElement("option");
+      opt.value = cid;
+      opt.textContent = `${DATA.categories[cid].name} (${count})`;
+      og.appendChild(opt);
+    }
+    if (og.children.length) catSel.appendChild(og);
+  }
 }
 
 /* ---------- Filter-Zustand ---------- */
 
 function getState() {
+  const dauer = $("#f-dauer").value;
+  const [tmin, tmax] = dauer ? dauer.split("-").map(Number) : [null, null];
   return {
     text: $("#f-text").value.trim().toLowerCase(),
     region: $("#f-region .chip.active")?.dataset.value || "",
     land: $("#f-land").value,
-    thema: $("#f-thema").value,
+    cat: $("#f-cat").value,
     org: $("#f-org").value,
     von: $("#f-von").value,
     bis: $("#f-bis").value,
-    tmin: +$("#f-tage-min").value,
-    tmax: +$("#f-tage-max").value,
+    tmin, tmax,
     typ: $("#f-typ").checked,
     bbox: $("#f-bbox").checked,
     sort: $("#sort").value,
@@ -107,25 +123,20 @@ function restoreFromURL() {
   const p = new URLSearchParams(location.search);
   if (p.get("q")) $("#f-text").value = p.get("q");
   if (p.get("land")) $("#f-land").value = p.get("land");
-  if (p.get("thema")) $("#f-thema").value = p.get("thema");
+  if (p.get("cat")) $("#f-cat").value = p.get("cat");
   if (p.get("org")) $("#f-org").value = p.get("org");
   $("#f-von").value = p.get("von") || todayISO();
   if (p.get("bis")) $("#f-bis").value = p.get("bis");
-  if (p.get("tmin")) $("#f-tage-min").value = p.get("tmin");
-  if (p.get("tmax")) $("#f-tage-max").value = p.get("tmax");
+  if (p.get("dauer")) $("#f-dauer").value = p.get("dauer");
   if (p.get("typ") === "0") $("#f-typ").checked = false;
   if (p.get("sort")) $("#sort").value = p.get("sort");
   const region = p.get("region") || "";
   for (const chip of document.querySelectorAll("#f-region .chip")) {
     chip.classList.toggle("active", chip.dataset.value === region);
   }
-  if (p.get("cat") && (DATA.categories[p.get("cat")] || p.get("cat") === "none")) {
-    sel.cat = p.get("cat");
-    sel.label = sel.cat === "none" ? GROUP_META.none.name : DATA.categories[sel.cat].name;
-  }
   if (p.get("bucket") && BUCKET_BY_ID[p.get("bucket")]) {
     sel.bucket = p.get("bucket");
-    sel.label = (sel.label ? sel.label + " · " : "") + BUCKET_BY_ID[sel.bucket].name;
+    sel.label = BUCKET_BY_ID[sel.bucket].name;
   }
 }
 
@@ -134,15 +145,13 @@ function syncURL(s) {
   if (s.text) p.set("q", s.text);
   if (s.region) p.set("region", s.region);
   if (s.land) p.set("land", s.land);
-  if (s.thema) p.set("thema", s.thema);
+  if (s.cat) p.set("cat", s.cat);
   if (s.org) p.set("org", s.org);
   if (s.von && s.von !== todayISO()) p.set("von", s.von);
   if (s.bis) p.set("bis", s.bis);
-  if (s.tmin > 1) p.set("tmin", s.tmin);
-  if (s.tmax < 15) p.set("tmax", s.tmax);
+  if ($("#f-dauer").value) p.set("dauer", $("#f-dauer").value);
   if (!s.typ) p.set("typ", "0");
   if (s.sort !== "start") p.set("sort", s.sort);
-  if (sel.cat) p.set("cat", sel.cat);
   if (sel.bucket) p.set("bucket", sel.bucket);
   const view = document.body.dataset.view;
   if (view && view !== "mm") p.set("view", view);
@@ -155,9 +164,8 @@ function syncURL(s) {
 function matchesBase(e, s, bounds) {
   if (s.region && e.region !== s.region) return false;
   if (s.land && e.land !== s.land) return false;
-  if (s.thema && e.thema !== s.thema) return false;
   if (s.org && (DATA.organizers[e.org]?.name || "") !== s.org) return false;
-  if (e.tage != null && (e.tage < s.tmin || e.tage > s.tmax)) return false;
+  if (s.tmin != null && e.tage != null && (e.tage < s.tmin || e.tage > s.tmax)) return false;
 
   // Zeitraum: Termin überlappt [von, bis] ODER Typenanerkennung erlaubt
   // Wiederholungen bis typ_bis (Folgetermine beim Veranstalter erfragen).
@@ -185,18 +193,15 @@ function matchesBase(e, s, bounds) {
   return true;
 }
 
-function matchesSel(e) {
-  if (sel.cat === "none" && e.cats.length) return false;
-  if (sel.cat && sel.cat !== "none" && !e.cats.includes(sel.cat)) return false;
-  if (sel.bucket && !e.buckets.includes(sel.bucket)) return false;
-  return true;
-}
-
 function applyFilters() {
   const s = getState();
   const bounds = s.bbox ? map.getBounds() : null;
   mmEvents = DATA.events.filter((e) => matchesBase(e, s, bounds));
-  filtered = sel.cat || sel.bucket ? mmEvents.filter(matchesSel) : mmEvents;
+  filtered = mmEvents.filter((e) => {
+    if (s.cat && !e.cats.includes(s.cat)) return false;
+    if (sel.bucket && !e.buckets.includes(sel.bucket)) return false;
+    return true;
+  });
 
   // Konkrete kommende Termine zuerst, danach wiederholbare Veranstaltungen
   // mit vergangenem Termin (sortiert nach Ende der Typenanerkennung)
@@ -212,11 +217,9 @@ function applyFilters() {
   filtered.sort(cmp);
 
   $("#count").textContent = `${filtered.length} Treffer`;
-  $("#dauer-out").textContent =
-    s.tmin === 1 && s.tmax === 15 ? "alle" : `${s.tmin}–${s.tmax === 15 ? "15+" : s.tmax} Tage`;
 
   const chip = $("#active-cat");
-  chip.hidden = !(sel.cat || sel.bucket);
+  chip.hidden = !sel.bucket;
   if (!chip.hidden) chip.textContent = `🧠 ${sel.label} ✕`;
 
   syncURL(s);
@@ -226,7 +229,7 @@ function applyFilters() {
 }
 
 function clearSel() {
-  sel = { cat: null, bucket: null, label: "" };
+  sel = { bucket: null, label: "" };
   applyFilters();
 }
 
@@ -250,8 +253,10 @@ function cardHTML(e, idx) {
       ${e.thema ? `<span class="badge badge--thema">${e.thema}</span>` : ""}
       ${typ}
     </div>
-    <div class="org"><strong>${org.name || "Unbekannter Veranstalter"}</strong><br>${links}
-      <span style="float:right;color:#9aa3af" title="Anerkennungskennziffer">${e.kz}</span></div>
+    <div class="org">
+      <div><strong>${org.name || "Unbekannter Veranstalter"}</strong><br>${links}</div>
+      <span class="kz" title="Anerkennungskennziffer">${e.kz}</span>
+    </div>
   </article>`;
 }
 
@@ -305,240 +310,217 @@ function popupHTML(ort, land, events) {
   return head + items + more;
 }
 
-/* ---------- Mindmap ---------- */
+/* ---------- Mindmap (aufklappbarer horizontaler Baum) ---------- */
+
+const MM_COL = 270;  // Spaltenbreite je Ebene
+const MM_ROW = 30;   // Zeilenhöhe
 
 const mm = {
   inited: false,
-  svg: null, g: null, sim: null,
-  linkSel: null, nodeSel: null,
-  expandedGroups: new Set(["bw", "gp"]),
-  expandedCats: new Set(),
-  selectedNode: null,
-  pos: new Map(), // id -> {x,y} bleibt über Rebuilds erhalten
+  svg: null, g: null, zoom: null,
+  expanded: new Set(),  // "grp:<gid>" / "c:<cid>"
+  selected: null,       // Knoten-Id
+  centered: false,
 };
 
 function initMindmap() {
   mm.svg = d3.select("#mindmap");
   mm.g = mm.svg.append("g");
+  mm.g.append("g").attr("class", "mm-cross");
   mm.g.append("g").attr("class", "mm-links");
   mm.g.append("g").attr("class", "mm-nodes");
-  mm.svg.call(
-    d3.zoom().scaleExtent([0.3, 2.5]).on("zoom", (ev) => mm.g.attr("transform", ev.transform))
-  );
-  mm.sim = d3.forceSimulation()
-    .force("link", d3.forceLink().id((d) => d.id).distance((l) => l.dist).strength((l) => l.cross ? 0.05 : 0.6))
-    .force("charge", d3.forceManyBody().strength(-320))
-    .force("collide", d3.forceCollide().radius((d) => d.r + 26))
-    .force("x", d3.forceX(0).strength(0.04))
-    .force("y", d3.forceY(0).strength(0.05))
-    .on("tick", mmTick);
+  mm.zoom = d3.zoom().scaleExtent([0.35, 2.5])
+    .on("zoom", (ev) => mm.g.attr("transform", ev.transform));
+  mm.svg.call(mm.zoom);
   mm.inited = true;
 }
 
-function mmGraph() {
-  const total = mmEvents.length;
-  const nodes = [], links = [];
-  const byId = {};
-  const add = (n) => { nodes.push(n); byId[n.id] = n; return n; };
-
-  add({ id: "root", kind: "root", label: "Bildungsurlaub", count: total, r: 36, color: "#1c2430" });
-
-  // Gruppen (Ebene 1)
-  const groupEvents = {};
-  for (const g of Object.keys(GROUP_META)) groupEvents[g] = [];
-  for (const e of mmEvents) {
-    if (!e.cats.length) { groupEvents.none.push(e); continue; }
-    const gs = new Set(e.cats.map((c) => DATA.categories[c]?.group).filter(Boolean));
-    for (const g of gs) groupEvents[g].push(e);
-  }
-  for (const [gid, meta] of Object.entries(GROUP_META)) {
-    const evs = groupEvents[gid];
-    if (!evs.length) continue;
-    add({
-      id: `g:${gid}`, kind: "group", gid, label: `${meta.icon} ${meta.name}`,
-      count: evs.length, r: 16 + Math.sqrt(evs.length) * 0.35, color: meta.color,
-      expanded: mm.expandedGroups.has(gid),
-    });
-    links.push({ source: "root", target: `g:${gid}`, dist: 150 });
-  }
-
-  // Unterkategorien (Ebene 2, offizielle Taxonomie)
+function mmTreeData() {
   const catEvents = {};
   for (const e of mmEvents) for (const c of e.cats) (catEvents[c] ??= []).push(e);
-  const visibleCats = [];
-  for (const [cid, info] of Object.entries(DATA.categories)) {
-    if (!mm.expandedGroups.has(info.group)) continue;
-    const evs = catEvents[cid] || [];
-    if (!evs.length) continue;
-    visibleCats.push(cid);
-    add({
-      id: `c:${cid}`, kind: "cat", cid, gid: info.group, label: info.name,
-      count: evs.length, r: 7 + Math.sqrt(evs.length) * 0.6,
-      color: GROUP_META[info.group].color, events: evs,
-      expanded: mm.expandedCats.has(cid),
-    });
-    links.push({ source: `g:${info.group}`, target: `c:${cid}`, dist: 95 });
-  }
-  if (mm.expandedGroups.has("none") && groupEvents.none.length) {
-    add({
-      id: "c:none", kind: "cat", cid: "none", gid: "none", label: "Unkategorisiert",
-      count: groupEvents.none.length, r: 7 + Math.sqrt(groupEvents.none.length) * 0.6,
-      color: GROUP_META.none.color, events: groupEvents.none,
-    });
-    links.push({ source: "g:none", target: "c:none", dist: 95 });
-  }
 
-  // Verfeinerung (Ebene 3, eigene Keyword-Buckets) – geteilte Knoten
-  for (const cid of visibleCats) {
-    if (!mm.expandedCats.has(cid)) continue;
-    const evs = catEvents[cid] || [];
-    const perBucket = {};
-    for (const e of evs) for (const b of e.buckets) (perBucket[b] ??= []).push(e);
-    for (const [bid, bevs] of Object.entries(perBucket)) {
-      if (bevs.length < 3) continue;
-      let node = byId[`b:${bid}`];
-      if (!node) {
-        node = add({
-          id: `b:${bid}`, kind: "bucket", bid, label: BUCKET_BY_ID[bid].name,
-          count: 0, r: 0, color: "#7c8aa0", events: [],
-        });
-      }
-      const known = new Set(node.events);
-      for (const e of bevs) if (!known.has(e)) node.events.push(e);
-      node.count = node.events.length;
-      node.r = 5 + Math.sqrt(node.count) * 0.7;
-      links.push({ source: `c:${cid}`, target: `b:${bid}`, dist: 70 });
-    }
-  }
+  const groups = [];
+  for (const [gid, ginfo] of Object.entries(CAT_GROUPS)) {
+    const catNodes = [];
+    const groupSet = new Set();
+    for (const cid of ginfo.cats) {
+      const evs = catEvents[cid] || [];
+      if (!evs.length) continue;
+      for (const e of evs) groupSet.add(e);
 
-  // Querverbindungen zwischen Kategorien mit vielen gemeinsamen Events
-  for (let i = 0; i < visibleCats.length; i++) {
-    for (let j = i + 1; j < visibleCats.length; j++) {
-      const a = new Set(catEvents[visibleCats[i]]);
-      let shared = 0;
-      for (const e of catEvents[visibleCats[j]]) if (a.has(e)) shared++;
-      if (shared >= 25) {
-        links.push({
-          source: `c:${visibleCats[i]}`, target: `c:${visibleCats[j]}`,
-          dist: 160, cross: true,
-        });
-      }
+      const perBucket = {};
+      for (const e of evs) for (const b of e.buckets) (perBucket[b] ??= []).push(e);
+      const bucketNodes = Object.entries(perBucket)
+        .filter(([, bevs]) => bevs.length >= 3)
+        .sort((a, b) => b[1].length - a[1].length)
+        .map(([bid, bevs]) => ({
+          id: `b:${cid}:${bid}`, kind: "bucket", bid, cid,
+          name: BUCKET_BY_ID[bid].name, events: bevs, color: ginfo.color,
+        }));
+
+      catNodes.push({
+        id: `c:${cid}`, kind: "cat", cid, gid,
+        name: DATA.categories[cid].name, events: evs, color: ginfo.color,
+        kids: bucketNodes,
+        children: mm.expanded.has(`c:${cid}`) && bucketNodes.length ? bucketNodes : null,
+      });
     }
+    if (!catNodes.length) continue;
+    catNodes.sort((a, b) => b.events.length - a.events.length);
+    groups.push({
+      id: `grp:${gid}`, kind: "group", gid,
+      name: `${ginfo.icon} ${ginfo.name}`, color: ginfo.color,
+      events: [...groupSet], kids: catNodes,
+      children: mm.expanded.has(`grp:${gid}`) ? catNodes : null,
+    });
   }
-  return { nodes, links };
+  return { id: "virtualroot", kind: "root", events: [], children: groups };
+}
+
+function mmRadius(d) {
+  const n = d.events.length;
+  if (d.kind === "group") return 9;
+  if (d.kind === "cat") return Math.min(13, 4.5 + Math.sqrt(n) * 0.27);
+  return Math.min(9, 3.5 + Math.sqrt(n) * 0.22);
 }
 
 function renderMindmap() {
   if (!mm.inited) initMindmap();
-  const { width, height } = $("#mindmap-view").getBoundingClientRect();
-  if (!width) return;
-  mm.svg.attr("viewBox", [-width / 2, -height / 2, width, height]);
+  const rect = $("#mindmap-view").getBoundingClientRect();
+  if (!rect.width) return;
+  mm.svg.attr("viewBox", [0, 0, rect.width, rect.height]);
 
-  const { nodes, links } = mmGraph();
+  const root = d3.hierarchy(mmTreeData());
+  d3.tree().nodeSize([MM_ROW, MM_COL])(root);
+  const nodes = root.descendants().filter((d) => d.depth > 0);
+  const links = root.links().filter((l) => l.source.depth > 0);
   for (const n of nodes) {
-    const p = mm.pos.get(n.id);
-    if (p) Object.assign(n, p);
-    if (n.id === "root") { n.fx = 0; n.fy = 0; }
+    n.px = (n.depth - 1) * MM_COL + 30;
+    n.py = n.x;
   }
 
-  const linkSel = mm.g.select(".mm-links").selectAll("line")
-    .data(links, (l) => `${l.source.id || l.source}|${l.target.id || l.target}`)
-    .join("line")
-    .attr("class", (l) => "mm-link" + (l.cross ? " mm-link--cross" : ""))
-    .attr("stroke-width", (l) => (l.cross ? 1.5 : 1.2));
+  if (!mm.centered) {
+    mm.svg.call(mm.zoom.transform, d3.zoomIdentity.translate(24, rect.height / 2));
+    mm.centered = true;
+  }
+
+  const t = d3.transition().duration(250);
+
+  mm.g.select(".mm-links").selectAll("path")
+    .data(links, (l) => l.target.data.id)
+    .join(
+      (enter) => enter.append("path").attr("class", "mm-link").attr("opacity", 0)
+        .attr("d", (l) => mmLinkPath(l.source, l.target)),
+      (update) => update,
+      (exit) => exit.remove()
+    )
+    .transition(t)
+    .attr("opacity", 1)
+    .attr("d", (l) => mmLinkPath(l.source, l.target));
+
+  // Querverbindungen: gleiches Unterthema unter verschiedenen Kategorien
+  const byBid = {};
+  for (const n of nodes) if (n.data.kind === "bucket") (byBid[n.data.bid] ??= []).push(n);
+  const cross = [];
+  for (const group of Object.values(byBid)) {
+    group.sort((a, b) => a.py - b.py);
+    for (let i = 0; i < group.length - 1; i++) cross.push([group[i], group[i + 1]]);
+  }
+  mm.g.select(".mm-cross").selectAll("path")
+    .data(cross, (c) => `${c[0].data.id}|${c[1].data.id}`)
+    .join("path")
+    .attr("class", "mm-link--cross")
+    .attr("d", (c) => {
+      const bow = Math.max(c[0].px, c[1].px) + 170;
+      return `M${c[0].px},${c[0].py} C${bow},${c[0].py} ${bow},${c[1].py} ${c[1].px},${c[1].py}`;
+    });
 
   const nodeSel = mm.g.select(".mm-nodes").selectAll("g.mm-node")
-    .data(nodes, (n) => n.id)
-    .join(
-      (enter) => {
-        const g = enter.append("g").attr("class", "mm-node");
-        g.append("circle");
-        g.append("text").attr("class", "mm-label").attr("text-anchor", "middle");
-        g.append("text").attr("class", "mm-count").attr("text-anchor", "middle");
-        return g;
-      }
-    )
-    .classed("selected", (n) => mm.selectedNode === n.id)
-    .call(d3.drag()
-      .on("start", (ev, d) => { if (!ev.active) mm.sim.alphaTarget(0.2).restart(); d.fx = d.x; d.fy = d.y; })
-      .on("drag", (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
-      .on("end", (ev, d) => { if (!ev.active) mm.sim.alphaTarget(0); if (d.id !== "root") { d.fx = null; d.fy = null; } }))
-    .on("click", (ev, d) => mmClick(d));
+    .data(nodes, (n) => n.data.id)
+    .join((enter) => {
+      const g = enter.append("g").attr("class", "mm-node").attr("opacity", 0);
+      g.append("circle");
+      g.append("text").attr("class", "mm-label");
+      g.append("title");
+      return g;
+    })
+    .classed("selected", (n) => mm.selected === n.data.id)
+    .on("click", (ev, d) => mmClick(d.data));
+
+  nodeSel.transition(t)
+    .attr("opacity", 1)
+    .attr("transform", (n) => `translate(${n.px},${n.py})`);
 
   nodeSel.select("circle")
-    .attr("r", (n) => n.r)
-    .attr("fill", (n) => n.color)
-    .attr("fill-opacity", (n) => (n.kind === "bucket" ? 0.85 : 1));
-  nodeSel.select(".mm-label")
-    .attr("dy", (n) => n.r + 13)
-    .attr("font-size", (n) => (n.kind === "root" ? 15 : n.kind === "group" ? 13 : 11))
-    .attr("font-weight", (n) => (n.kind === "bucket" ? 400 : 700))
-    .text((n) => (n.label.length > 30 ? n.label.slice(0, 29) + "…" : n.label));
-  nodeSel.select(".mm-count")
-    .attr("dy", (n) => n.r + 25)
-    .attr("font-size", 10)
-    .text((n) => `${n.count}${n.kind !== "bucket" && n.kind !== "root" ? (n.expanded ? " ▾" : " ▸") : ""}`);
+    .attr("r", (n) => mmRadius(n.data))
+    .attr("fill", (n) => n.data.color)
+    .attr("fill-opacity", (n) => (n.data.kind === "bucket" ? 0.55 : 1));
 
-  mm.linkSel = linkSel;
-  mm.nodeSel = nodeSel;
-  mm.sim.nodes(nodes);
-  mm.sim.force("link").links(links);
-  mm.sim.alpha(0.7).restart();
-}
+  nodeSel.select("title").text((n) => `${n.data.name} (${n.data.events.length})`);
 
-function mmTick() {
-  if (!mm.linkSel) return;
-  mm.linkSel
-    .attr("x1", (l) => l.source.x).attr("y1", (l) => l.source.y)
-    .attr("x2", (l) => l.target.x).attr("y2", (l) => l.target.y);
-  mm.nodeSel.attr("transform", (n) => {
-    mm.pos.set(n.id, { x: n.x, y: n.y });
-    return `translate(${n.x},${n.y})`;
-  });
-}
-
-function mmClick(node) {
-  if (node.kind === "root") return;
-  if (node.kind === "group") {
-    if (mm.expandedGroups.has(node.gid)) {
-      mm.expandedGroups.delete(node.gid);
-      for (const cid of [...mm.expandedCats]) {
-        if (DATA.categories[cid]?.group === node.gid) mm.expandedCats.delete(cid);
+  nodeSel.select("text.mm-label")
+    .attr("x", (n) => mmRadius(n.data) + 7)
+    .attr("dy", "0.32em")
+    .attr("font-size", (n) => (n.data.kind === "group" ? 13.5 : n.data.kind === "cat" ? 12 : 11))
+    .attr("font-weight", (n) => (n.data.kind === "group" ? 700 : n.data.kind === "cat" ? 600 : 400))
+    .each(function (n) {
+      const d = n.data;
+      const tx = d3.select(this);
+      tx.selectAll("tspan").remove();
+      tx.text(null);
+      tx.append("tspan").text(d.name.length > 34 ? d.name.slice(0, 33) + "…" : d.name);
+      tx.append("tspan").attr("class", "mm-count").text(`  ${d.events.length}`);
+      if (d.kids?.length) {
+        tx.append("tspan").attr("class", "mm-chevron")
+          .text(mm.expanded.has(d.id) ? " ▾" : " ▸");
       }
+    });
+}
+
+function mmLinkPath(s, tgt) {
+  const mid = (s.px + tgt.px) / 2;
+  return `M${s.px},${s.py} C${mid},${s.py} ${mid},${tgt.py} ${tgt.px},${tgt.py}`;
+}
+
+function mmClick(d) {
+  if (d.kind === "group") {
+    if (mm.expanded.has(d.id)) {
+      mm.expanded.delete(d.id);
+      for (const kid of d.kids) mm.expanded.delete(kid.id);
+      if (mm.selected?.startsWith("c:") || mm.selected?.startsWith("b:")) hidePanel();
     } else {
-      mm.expandedGroups.add(node.gid);
+      mm.expanded.add(d.id);
     }
     renderMindmap();
     return;
   }
-  if (node.kind === "cat") {
-    if (mm.selectedNode === node.id && mm.expandedCats.has(node.cid)) {
-      mm.expandedCats.delete(node.cid);
-      mm.selectedNode = null;
+  if (d.kind === "cat") {
+    if (mm.selected === d.id) {
+      mm.expanded.delete(d.id);
       hidePanel();
     } else {
-      mm.expandedCats.add(node.cid);
-      mm.selectedNode = node.id;
-      showPanel(node);
+      if (d.kids.length) mm.expanded.add(d.id);
+      mm.selected = d.id;
+      showPanel(d);
     }
     renderMindmap();
     return;
   }
-  // bucket
-  mm.selectedNode = node.id;
-  showPanel(node);
+  // Unterthema (Bucket)
+  mm.selected = d.id;
+  showPanel(d);
   renderMindmap();
 }
 
 let panelNode = null;
 
-function showPanel(node) {
-  panelNode = node;
-  const icon = node.kind === "cat" ? GROUP_META[node.gid]?.icon || "" : "🔎";
-  $("#mm-panel-title").textContent = `${icon} ${node.label} (${node.count})`;
+function showPanel(d) {
+  panelNode = d;
+  const icon = d.kind === "cat" ? CAT_GROUPS[d.gid]?.icon || "" : "🔎";
+  $("#mm-panel-title").textContent = `${icon} ${d.name} (${d.events.length})`;
   const today = todayISO();
   const dateKey = (e) => ((e.start || "") >= today ? `0${e.start}` : `1${e.typ_bis || "9999"}`);
-  const evs = [...node.events].sort((a, b) => dateKey(a).localeCompare(dateKey(b)));
+  const evs = [...d.events].sort((a, b) => dateKey(a).localeCompare(dateKey(b)));
   const max = 50;
   let html = evs.slice(0, max).map((e) => cardHTML(e, DATA.events.indexOf(e))).join("");
   if (evs.length > max) html += `<div class="empty">… ${evs.length - max} weitere – „In Liste öffnen" zeigt alle.</div>`;
@@ -550,13 +532,18 @@ function showPanel(node) {
 function hidePanel() {
   $("#mm-panel").hidden = true;
   panelNode = null;
-  if (mm.selectedNode) { mm.selectedNode = null; if (mm.nodeSel) mm.nodeSel.classed("selected", false); }
+  if (mm.selected) {
+    mm.selected = null;
+    if (mm.inited) mm.g.selectAll(".mm-node").classed("selected", false);
+  }
 }
 
 function applyPanelSelection(view) {
   if (!panelNode) return;
-  if (panelNode.kind === "cat") sel = { cat: panelNode.cid, bucket: null, label: panelNode.label };
-  else sel = { cat: null, bucket: panelNode.bid, label: panelNode.label };
+  $("#f-cat").value = panelNode.cid;
+  sel = panelNode.kind === "bucket"
+    ? { bucket: panelNode.bid, label: panelNode.name }
+    : { bucket: null, label: "" };
   switchView(view);
   applyFilters();
 }
@@ -575,35 +562,24 @@ function bindEvents() {
     });
   }
 
-  for (const id of ["#f-land", "#f-thema", "#f-org", "#f-von", "#f-bis", "#f-typ", "#f-bbox", "#sort"]) {
+  for (const id of ["#f-land", "#f-cat", "#f-org", "#f-von", "#f-bis", "#f-dauer", "#f-typ", "#f-bbox", "#sort"]) {
     $(id).addEventListener("change", applyFilters);
   }
-
-  // Dauer-Slider: min darf max nicht überholen
-  $("#f-tage-min").addEventListener("input", () => {
-    if (+$("#f-tage-min").value > +$("#f-tage-max").value) $("#f-tage-max").value = $("#f-tage-min").value;
-    applyFilters();
-  });
-  $("#f-tage-max").addEventListener("input", () => {
-    if (+$("#f-tage-max").value < +$("#f-tage-min").value) $("#f-tage-min").value = $("#f-tage-max").value;
-    applyFilters();
-  });
 
   $("#reset").addEventListener("click", () => {
     $("#f-text").value = "";
     $("#f-land").value = "";
-    $("#f-thema").value = "";
+    $("#f-cat").value = "";
     $("#f-org").value = "";
     $("#f-von").value = todayISO();
     $("#f-bis").value = "";
-    $("#f-tage-min").value = 1;
-    $("#f-tage-max").value = 15;
+    $("#f-dauer").value = "";
     $("#f-typ").checked = true;
     $("#f-bbox").checked = false;
     $("#sort").value = "start";
     document.querySelectorAll("#f-region .chip").forEach((c) =>
       c.classList.toggle("active", c.dataset.value === ""));
-    sel = { cat: null, bucket: null, label: "" };
+    sel = { bucket: null, label: "" };
     applyFilters();
   });
 
