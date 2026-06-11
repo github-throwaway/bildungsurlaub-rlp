@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bildungsurlaub-Finder RLP</title>
+  <meta name="description" content="Alternatives Frontend für die Suche nach anerkannten Bildungsurlaub-Veranstaltungen in Rheinland-Pfalz – mit Karte, Volltextsuche und flexiblen Filtern.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🎓</text></svg>">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>🎓 Bildungsurlaub-Finder <span class="rlp">RLP</span></h1>
+    <p class="subtitle">Anerkannte Veranstaltungen nach dem Bildungsfreistellungsgesetz Rheinland-Pfalz
+      — Daten: <a href="https://awv.rlp.de/suche/" target="_blank" rel="noopener">awv.rlp.de</a>
+      <span id="data-date"></span></p>
+  </header>
+
+  <section class="filters" id="filters">
+    <div class="filter-row">
+      <input type="search" id="f-text" class="search-input" placeholder="🔍 Suche in Titel, Ort, Veranstalter …" autocomplete="off">
+      <div class="chip-group" id="f-region">
+        <button class="chip active" data-value="">Alle Regionen</button>
+        <button class="chip" data-value="rlp">Rheinland-Pfalz</button>
+        <button class="chip" data-value="bundesland">Anderes Bundesland</button>
+        <button class="chip" data-value="ausland">Ausland</button>
+      </div>
+    </div>
+    <div class="filter-row">
+      <label class="field">
+        <span>Land</span>
+        <select id="f-land"><option value="">Alle Länder</option></select>
+      </label>
+      <label class="field">
+        <span>Themenbereich</span>
+        <select id="f-thema"><option value="">Alle Themen</option></select>
+      </label>
+      <label class="field">
+        <span>Veranstalter</span>
+        <select id="f-org"><option value="">Alle Veranstalter</option></select>
+      </label>
+      <label class="field">
+        <span>Von</span>
+        <input type="date" id="f-von">
+      </label>
+      <label class="field">
+        <span>Bis</span>
+        <input type="date" id="f-bis">
+      </label>
+      <label class="field">
+        <span>Dauer: <output id="dauer-out">alle</output></span>
+        <div class="range-pair">
+          <input type="range" id="f-tage-min" min="1" max="15" value="1">
+          <input type="range" id="f-tage-max" min="1" max="15" value="15">
+        </div>
+      </label>
+    </div>
+    <div class="filter-row filter-row--meta">
+      <label class="checkbox"><input type="checkbox" id="f-typ" checked> Wiederholbare Veranstaltungen einbeziehen (Typenanerkennung)</label>
+      <label class="checkbox"><input type="checkbox" id="f-bbox"> Nur sichtbaren Kartenausschnitt</label>
+      <span class="spacer"></span>
+      <span id="count" class="count"></span>
+      <button id="reset" class="reset-btn">Filter zurücksetzen</button>
+    </div>
+  </section>
+
+  <main class="content">
+    <div id="map"></div>
+    <aside class="results">
+      <div class="results-head">
+        <label class="field field--inline">
+          <span>Sortierung</span>
+          <select id="sort">
+            <option value="start">Datum ↑</option>
+            <option value="tage">Dauer ↓</option>
+            <option value="ort">Ort A–Z</option>
+            <option value="title">Titel A–Z</option>
+          </select>
+        </label>
+      </div>
+      <div id="list" class="list"></div>
+      <button id="more" class="more-btn" hidden>Mehr anzeigen</button>
+    </aside>
+  </main>
+
+  <nav class="mobile-tabs">
+    <button id="tab-map" class="active">🗺️ Karte</button>
+    <button id="tab-list">📋 Liste</button>
+  </nav>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
