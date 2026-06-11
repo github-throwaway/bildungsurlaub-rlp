@@ -4,7 +4,7 @@ Alternatives Frontend für die [Bildungsurlaub-Suche des Landes Rheinland-Pfalz]
 
 **Features**
 
-- 🧠 **Entdecken** (Standard-Ansicht): aufklappbare Themen-Mindmap — 8 thematische Gruppen (Sprachen gebündelt, Gesundheit, Beruf, …) → offizielle Kategorien der AWV-Suche → per Titel-Keywords verfeinerte Unterthemen (Yoga, KI, Resilienz, …); gestrichelte Querverbindungen zeigen gleiche Unterthemen in verschiedenen Ästen, Klick öffnet die Veranstaltungen und übernimmt die Auswahl als Filter in Karte/Liste
+- 🧠 **Entdecken** (Standard-Ansicht): die Themen-Hierarchie — 8 Gruppen (Sprachen gebündelt, Gesundheit, Beruf, …) → offizielle Kategorien der AWV-Suche → per Titel-Keywords verfeinerte Unterthemen (Yoga, KI, Resilienz, …) — in **fünf umschaltbaren Darstellungen**: 🫧 zoombare Bubbles (Standard), 🟦 Treemap mit Drill-down, ☀️ Sunburst, 🌳 aufklappbarer Baum mit Querverbindungen, 🗂️ Kachel-Browser. Klick öffnet die Veranstaltungen und übernimmt die Auswahl als Filter in Karte/Liste; die gewählte Darstellung wird gemerkt
 - 🗺️ Interaktive Karte (Leaflet + OpenStreetMap) mit Marker-Clustering aller ~6500 anerkannten Veranstaltungen
 - 🔍 Volltextsuche über Titel, Ort und Veranstalter
 - 🎛️ Filter: Region (RLP / anderes Bundesland / Ausland), Land, alle 43 offiziellen Kategorien (thematisch gruppiert), Veranstalter, Zeitraum, Dauer
@@ -19,7 +19,8 @@ scraper/scrape.py     # holt + parst die Daten von awv.rlp.de, taggt die offizie
                       # Unterkategorien (1 Anfrage pro id_stichwort), geocodiert via Nominatim
 scraper/geocache.json # Geocoding-Cache (nur neue Orte werden angefragt)
 docs/                 # statisches Frontend (GitHub-Pages-Root)
-docs/taxonomy.js      # Verfeinerungs-Ebene der Mindmap (Keyword-Buckets)
+docs/taxonomy.js      # Themen-Gruppen + Keyword-Unterthemen
+docs/explore.js       # die 5 Visualisierungen der Entdecken-Ansicht
 docs/data/events.json # generierte Daten
 ```
 

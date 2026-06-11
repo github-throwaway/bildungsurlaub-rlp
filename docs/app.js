@@ -48,6 +48,7 @@ async function init() {
   buildFilterOptions();
   restoreFromURL();
   bindEvents();
+  bindVizSwitcher();
   switchView(new URLSearchParams(location.search).get("view") || "mm");
   applyFilters();
 }
@@ -153,6 +154,7 @@ function syncURL(s) {
   if (!s.typ) p.set("typ", "0");
   if (s.sort !== "start") p.set("sort", s.sort);
   if (sel.bucket) p.set("bucket", sel.bucket);
+  if (vizMode && vizMode !== VIZ_DEFAULT) p.set("viz", vizMode);
   const view = document.body.dataset.view;
   if (view && view !== "mm") p.set("view", view);
   const qs = p.toString();
@@ -310,214 +312,16 @@ function popupHTML(ort, land, events) {
   return head + items + more;
 }
 
-/* ---------- Mindmap (aufklappbarer horizontaler Baum) ---------- */
-
-const MM_COL = 270;  // Spaltenbreite je Ebene
-const MM_ROW = 30;   // Zeilenhöhe
-
-const mm = {
-  inited: false,
-  svg: null, g: null, zoom: null,
-  expanded: new Set(),  // "grp:<gid>" / "c:<cid>"
-  selected: null,       // Knoten-Id
-  centered: false,
-};
-
-function initMindmap() {
-  mm.svg = d3.select("#mindmap");
-  mm.g = mm.svg.append("g");
-  mm.g.append("g").attr("class", "mm-cross");
-  mm.g.append("g").attr("class", "mm-links");
-  mm.g.append("g").attr("class", "mm-nodes");
-  mm.zoom = d3.zoom().scaleExtent([0.35, 2.5])
-    .on("zoom", (ev) => mm.g.attr("transform", ev.transform));
-  mm.svg.call(mm.zoom);
-  mm.inited = true;
-}
-
-function mmTreeData() {
-  const catEvents = {};
-  for (const e of mmEvents) for (const c of e.cats) (catEvents[c] ??= []).push(e);
-
-  const groups = [];
-  for (const [gid, ginfo] of Object.entries(CAT_GROUPS)) {
-    const catNodes = [];
-    const groupSet = new Set();
-    for (const cid of ginfo.cats) {
-      const evs = catEvents[cid] || [];
-      if (!evs.length) continue;
-      for (const e of evs) groupSet.add(e);
-
-      const perBucket = {};
-      for (const e of evs) for (const b of e.buckets) (perBucket[b] ??= []).push(e);
-      const bucketNodes = Object.entries(perBucket)
-        .filter(([, bevs]) => bevs.length >= 3)
-        .sort((a, b) => b[1].length - a[1].length)
-        .map(([bid, bevs]) => ({
-          id: `b:${cid}:${bid}`, kind: "bucket", bid, cid,
-          name: BUCKET_BY_ID[bid].name, events: bevs, color: ginfo.color,
-        }));
-
-      catNodes.push({
-        id: `c:${cid}`, kind: "cat", cid, gid,
-        name: DATA.categories[cid].name, events: evs, color: ginfo.color,
-        kids: bucketNodes,
-        children: mm.expanded.has(`c:${cid}`) && bucketNodes.length ? bucketNodes : null,
-      });
-    }
-    if (!catNodes.length) continue;
-    catNodes.sort((a, b) => b.events.length - a.events.length);
-    groups.push({
-      id: `grp:${gid}`, kind: "group", gid,
-      name: `${ginfo.icon} ${ginfo.name}`, color: ginfo.color,
-      events: [...groupSet], kids: catNodes,
-      children: mm.expanded.has(`grp:${gid}`) ? catNodes : null,
-    });
-  }
-  return { id: "virtualroot", kind: "root", events: [], children: groups };
-}
-
-function mmRadius(d) {
-  const n = d.events.length;
-  if (d.kind === "group") return 9;
-  if (d.kind === "cat") return Math.min(13, 4.5 + Math.sqrt(n) * 0.27);
-  return Math.min(9, 3.5 + Math.sqrt(n) * 0.22);
-}
-
-function renderMindmap() {
-  if (!mm.inited) initMindmap();
-  const rect = $("#mindmap-view").getBoundingClientRect();
-  if (!rect.width) return;
-  mm.svg.attr("viewBox", [0, 0, rect.width, rect.height]);
-
-  const root = d3.hierarchy(mmTreeData());
-  d3.tree().nodeSize([MM_ROW, MM_COL])(root);
-  const nodes = root.descendants().filter((d) => d.depth > 0);
-  const links = root.links().filter((l) => l.source.depth > 0);
-  for (const n of nodes) {
-    n.px = (n.depth - 1) * MM_COL + 30;
-    n.py = n.x;
-  }
-
-  if (!mm.centered) {
-    mm.svg.call(mm.zoom.transform, d3.zoomIdentity.translate(24, rect.height / 2));
-    mm.centered = true;
-  }
-
-  const t = d3.transition().duration(250);
-
-  mm.g.select(".mm-links").selectAll("path")
-    .data(links, (l) => l.target.data.id)
-    .join(
-      (enter) => enter.append("path").attr("class", "mm-link").attr("opacity", 0)
-        .attr("d", (l) => mmLinkPath(l.source, l.target)),
-      (update) => update,
-      (exit) => exit.remove()
-    )
-    .transition(t)
-    .attr("opacity", 1)
-    .attr("d", (l) => mmLinkPath(l.source, l.target));
-
-  // Querverbindungen: gleiches Unterthema unter verschiedenen Kategorien
-  const byBid = {};
-  for (const n of nodes) if (n.data.kind === "bucket") (byBid[n.data.bid] ??= []).push(n);
-  const cross = [];
-  for (const group of Object.values(byBid)) {
-    group.sort((a, b) => a.py - b.py);
-    for (let i = 0; i < group.length - 1; i++) cross.push([group[i], group[i + 1]]);
-  }
-  mm.g.select(".mm-cross").selectAll("path")
-    .data(cross, (c) => `${c[0].data.id}|${c[1].data.id}`)
-    .join("path")
-    .attr("class", "mm-link--cross")
-    .attr("d", (c) => {
-      const bow = Math.max(c[0].px, c[1].px) + 170;
-      return `M${c[0].px},${c[0].py} C${bow},${c[0].py} ${bow},${c[1].py} ${c[1].px},${c[1].py}`;
-    });
-
-  const nodeSel = mm.g.select(".mm-nodes").selectAll("g.mm-node")
-    .data(nodes, (n) => n.data.id)
-    .join((enter) => {
-      const g = enter.append("g").attr("class", "mm-node").attr("opacity", 0);
-      g.append("circle");
-      g.append("text").attr("class", "mm-label");
-      g.append("title");
-      return g;
-    })
-    .classed("selected", (n) => mm.selected === n.data.id)
-    .on("click", (ev, d) => mmClick(d.data));
-
-  nodeSel.transition(t)
-    .attr("opacity", 1)
-    .attr("transform", (n) => `translate(${n.px},${n.py})`);
-
-  nodeSel.select("circle")
-    .attr("r", (n) => mmRadius(n.data))
-    .attr("fill", (n) => n.data.color)
-    .attr("fill-opacity", (n) => (n.data.kind === "bucket" ? 0.55 : 1));
-
-  nodeSel.select("title").text((n) => `${n.data.name} (${n.data.events.length})`);
-
-  nodeSel.select("text.mm-label")
-    .attr("x", (n) => mmRadius(n.data) + 7)
-    .attr("dy", "0.32em")
-    .attr("font-size", (n) => (n.data.kind === "group" ? 13.5 : n.data.kind === "cat" ? 12 : 11))
-    .attr("font-weight", (n) => (n.data.kind === "group" ? 700 : n.data.kind === "cat" ? 600 : 400))
-    .each(function (n) {
-      const d = n.data;
-      const tx = d3.select(this);
-      tx.selectAll("tspan").remove();
-      tx.text(null);
-      tx.append("tspan").text(d.name.length > 34 ? d.name.slice(0, 33) + "…" : d.name);
-      tx.append("tspan").attr("class", "mm-count").text(`  ${d.events.length}`);
-      if (d.kids?.length) {
-        tx.append("tspan").attr("class", "mm-chevron")
-          .text(mm.expanded.has(d.id) ? " ▾" : " ▸");
-      }
-    });
-}
-
-function mmLinkPath(s, tgt) {
-  const mid = (s.px + tgt.px) / 2;
-  return `M${s.px},${s.py} C${mid},${s.py} ${mid},${tgt.py} ${tgt.px},${tgt.py}`;
-}
-
-function mmClick(d) {
-  if (d.kind === "group") {
-    if (mm.expanded.has(d.id)) {
-      mm.expanded.delete(d.id);
-      for (const kid of d.kids) mm.expanded.delete(kid.id);
-      if (mm.selected?.startsWith("c:") || mm.selected?.startsWith("b:")) hidePanel();
-    } else {
-      mm.expanded.add(d.id);
-    }
-    renderMindmap();
-    return;
-  }
-  if (d.kind === "cat") {
-    if (mm.selected === d.id) {
-      mm.expanded.delete(d.id);
-      hidePanel();
-    } else {
-      if (d.kids.length) mm.expanded.add(d.id);
-      mm.selected = d.id;
-      showPanel(d);
-    }
-    renderMindmap();
-    return;
-  }
-  // Unterthema (Bucket)
-  mm.selected = d.id;
-  showPanel(d);
-  renderMindmap();
-}
+/* ---------- Seitenpanel der Entdecken-Ansicht ----------
+   (Die Visualisierungen selbst liegen in explore.js) */
 
 let panelNode = null;
 
 function showPanel(d) {
   panelNode = d;
-  const icon = d.kind === "cat" ? CAT_GROUPS[d.gid]?.icon || "" : "🔎";
+  const icon = { cat: CAT_GROUPS[d.gid]?.icon, group: d.icon, bucket: "🔎", rest: "📚" }[d.kind] || "📋";
   $("#mm-panel-title").textContent = `${icon} ${d.name} (${d.events.length})`;
+  $("#mm-panel .panel-actions").style.display = d.cid ? "" : "none";
   const today = todayISO();
   const dateKey = (e) => ((e.start || "") >= today ? `0${e.start}` : `1${e.typ_bis || "9999"}`);
   const evs = [...d.events].sort((a, b) => dateKey(a).localeCompare(dateKey(b)));
@@ -532,14 +336,11 @@ function showPanel(d) {
 function hidePanel() {
   $("#mm-panel").hidden = true;
   panelNode = null;
-  if (mm.selected) {
-    mm.selected = null;
-    if (mm.inited) mm.g.selectAll(".mm-node").classed("selected", false);
-  }
+  vizClearSelection();
 }
 
 function applyPanelSelection(view) {
-  if (!panelNode) return;
+  if (!panelNode || !panelNode.cid) return;
   $("#f-cat").value = panelNode.cid;
   sel = panelNode.kind === "bucket"
     ? { bucket: panelNode.bid, label: panelNode.name }

@@ -74,8 +74,17 @@
 
   <main class="content">
     <div id="mindmap-view">
+      <div id="mm-switch">
+        <button data-viz="pack" title="Zoombare Blasen">🫧 Bubbles</button>
+        <button data-viz="treemap" title="Flächen-Kacheln mit Drill-down">🟦 Treemap</button>
+        <button data-viz="sunburst" title="Radialer Drill-down">☀️ Sunburst</button>
+        <button data-viz="tree" title="Aufklappbarer Baum">🌳 Baum</button>
+        <button data-viz="tiles" title="Karten-Browser">🗂️ Kacheln</button>
+      </div>
+      <div id="mm-breadcrumb" hidden></div>
       <svg id="mindmap"></svg>
-      <div id="mm-hint">Thema anklicken = aufklappen · Unterthema anklicken = Veranstaltungen ansehen · gestrichelte Linien = thematische Überschneidung · Ziehen/Scrollen = verschieben/zoomen</div>
+      <div id="mm-tiles" hidden></div>
+      <div id="mm-hint"></div>
       <aside id="mm-panel" hidden>
         <header>
           <strong id="mm-panel-title"></strong>
@@ -116,6 +125,7 @@
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="https://unpkg.com/d3@7.9.0/dist/d3.min.js"></script>
   <script src="taxonomy.js"></script>
+  <script src="explore.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
