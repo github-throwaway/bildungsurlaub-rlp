@@ -2,11 +2,13 @@
 "use strict";
 
 const PAGE_SIZE = 60;
-let DATA = null;          // { organizers, places, events, generated }
-let filtered = [];        // aktuell gefilterte Events
+let DATA = null;          // { groups, categories, organizers, places, events }
+let filtered = [];        // aktuell gefilterte Events (inkl. Kategorie-Auswahl)
+let mmEvents = [];        // wie filtered, aber ohne Kategorie-Auswahl (Basis der Mindmap)
 let shown = 0;            // Anzahl gerenderter Cards
 let map, cluster;
 let markersByPlace = {};  // "Ort|Land" -> Marker
+let sel = { cat: null, bucket: null, label: "" }; // Auswahl aus der Mindmap
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -37,10 +39,16 @@ async function init() {
   DATA = await resp.json();
   $("#data-date").textContent = `· Stand: ${fmtDate(DATA.generated.slice(0, 10))}`;
 
+  for (const e of DATA.events) {
+    e.cats = e.cats || [];
+    e.buckets = bucketize(e);
+  }
+
   initMap();
   buildFilterOptions();
   restoreFromURL();
   bindEvents();
+  switchView(new URLSearchParams(location.search).get("view") || "mm");
   applyFilters();
 }
 
@@ -111,6 +119,14 @@ function restoreFromURL() {
   for (const chip of document.querySelectorAll("#f-region .chip")) {
     chip.classList.toggle("active", chip.dataset.value === region);
   }
+  if (p.get("cat") && (DATA.categories[p.get("cat")] || p.get("cat") === "none")) {
+    sel.cat = p.get("cat");
+    sel.label = sel.cat === "none" ? GROUP_META.none.name : DATA.categories[sel.cat].name;
+  }
+  if (p.get("bucket") && BUCKET_BY_ID[p.get("bucket")]) {
+    sel.bucket = p.get("bucket");
+    sel.label = (sel.label ? sel.label + " · " : "") + BUCKET_BY_ID[sel.bucket].name;
+  }
 }
 
 function syncURL(s) {
@@ -126,13 +142,17 @@ function syncURL(s) {
   if (s.tmax < 15) p.set("tmax", s.tmax);
   if (!s.typ) p.set("typ", "0");
   if (s.sort !== "start") p.set("sort", s.sort);
+  if (sel.cat) p.set("cat", sel.cat);
+  if (sel.bucket) p.set("bucket", sel.bucket);
+  const view = document.body.dataset.view;
+  if (view && view !== "mm") p.set("view", view);
   const qs = p.toString();
   history.replaceState(null, "", qs ? `?${qs}` : location.pathname);
 }
 
 /* ---------- Filtern + Sortieren ---------- */
 
-function matches(e, s, bounds) {
+function matchesBase(e, s, bounds) {
   if (s.region && e.region !== s.region) return false;
   if (s.land && e.land !== s.land) return false;
   if (s.thema && e.thema !== s.thema) return false;
@@ -145,11 +165,8 @@ function matches(e, s, bounds) {
     const endsAfter = (e.end || e.start || "") >= s.von;
     const repeatable = s.typ && e.typ_bis && e.typ_bis >= s.von;
     if (!endsAfter && !repeatable) return false;
-  } else if (!s.typ && e.typ_bis) {
-    // typ deaktiviert + kein "von": nichts auszuschließen
   }
   if (s.bis && (e.start || "") > s.bis) {
-    // Startet nach dem Zeitfenster – nur ok, wenn wiederholbar und Fenster vor typ_bis liegt
     if (!(s.typ && e.typ_bis && (!s.von || s.von <= e.typ_bis))) return false;
   }
 
@@ -168,10 +185,18 @@ function matches(e, s, bounds) {
   return true;
 }
 
+function matchesSel(e) {
+  if (sel.cat === "none" && e.cats.length) return false;
+  if (sel.cat && sel.cat !== "none" && !e.cats.includes(sel.cat)) return false;
+  if (sel.bucket && !e.buckets.includes(sel.bucket)) return false;
+  return true;
+}
+
 function applyFilters() {
   const s = getState();
   const bounds = s.bbox ? map.getBounds() : null;
-  filtered = DATA.events.filter((e) => matches(e, s, bounds));
+  mmEvents = DATA.events.filter((e) => matchesBase(e, s, bounds));
+  filtered = sel.cat || sel.bucket ? mmEvents.filter(matchesSel) : mmEvents;
 
   // Konkrete kommende Termine zuerst, danach wiederholbare Veranstaltungen
   // mit vergangenem Termin (sortiert nach Ende der Typenanerkennung)
@@ -190,9 +215,19 @@ function applyFilters() {
   $("#dauer-out").textContent =
     s.tmin === 1 && s.tmax === 15 ? "alle" : `${s.tmin}–${s.tmax === 15 ? "15+" : s.tmax} Tage`;
 
+  const chip = $("#active-cat");
+  chip.hidden = !(sel.cat || sel.bucket);
+  if (!chip.hidden) chip.textContent = `🧠 ${sel.label} ✕`;
+
   syncURL(s);
   renderList(true);
   renderMarkers();
+  if (document.body.dataset.view === "mm") renderMindmap();
+}
+
+function clearSel() {
+  sel = { cat: null, bucket: null, label: "" };
+  applyFilters();
 }
 
 /* ---------- Liste ---------- */
@@ -270,6 +305,262 @@ function popupHTML(ort, land, events) {
   return head + items + more;
 }
 
+/* ---------- Mindmap ---------- */
+
+const mm = {
+  inited: false,
+  svg: null, g: null, sim: null,
+  linkSel: null, nodeSel: null,
+  expandedGroups: new Set(["bw", "gp"]),
+  expandedCats: new Set(),
+  selectedNode: null,
+  pos: new Map(), // id -> {x,y} bleibt über Rebuilds erhalten
+};
+
+function initMindmap() {
+  mm.svg = d3.select("#mindmap");
+  mm.g = mm.svg.append("g");
+  mm.g.append("g").attr("class", "mm-links");
+  mm.g.append("g").attr("class", "mm-nodes");
+  mm.svg.call(
+    d3.zoom().scaleExtent([0.3, 2.5]).on("zoom", (ev) => mm.g.attr("transform", ev.transform))
+  );
+  mm.sim = d3.forceSimulation()
+    .force("link", d3.forceLink().id((d) => d.id).distance((l) => l.dist).strength((l) => l.cross ? 0.05 : 0.6))
+    .force("charge", d3.forceManyBody().strength(-320))
+    .force("collide", d3.forceCollide().radius((d) => d.r + 26))
+    .force("x", d3.forceX(0).strength(0.04))
+    .force("y", d3.forceY(0).strength(0.05))
+    .on("tick", mmTick);
+  mm.inited = true;
+}
+
+function mmGraph() {
+  const total = mmEvents.length;
+  const nodes = [], links = [];
+  const byId = {};
+  const add = (n) => { nodes.push(n); byId[n.id] = n; return n; };
+
+  add({ id: "root", kind: "root", label: "Bildungsurlaub", count: total, r: 36, color: "#1c2430" });
+
+  // Gruppen (Ebene 1)
+  const groupEvents = {};
+  for (const g of Object.keys(GROUP_META)) groupEvents[g] = [];
+  for (const e of mmEvents) {
+    if (!e.cats.length) { groupEvents.none.push(e); continue; }
+    const gs = new Set(e.cats.map((c) => DATA.categories[c]?.group).filter(Boolean));
+    for (const g of gs) groupEvents[g].push(e);
+  }
+  for (const [gid, meta] of Object.entries(GROUP_META)) {
+    const evs = groupEvents[gid];
+    if (!evs.length) continue;
+    add({
+      id: `g:${gid}`, kind: "group", gid, label: `${meta.icon} ${meta.name}`,
+      count: evs.length, r: 16 + Math.sqrt(evs.length) * 0.35, color: meta.color,
+      expanded: mm.expandedGroups.has(gid),
+    });
+    links.push({ source: "root", target: `g:${gid}`, dist: 150 });
+  }
+
+  // Unterkategorien (Ebene 2, offizielle Taxonomie)
+  const catEvents = {};
+  for (const e of mmEvents) for (const c of e.cats) (catEvents[c] ??= []).push(e);
+  const visibleCats = [];
+  for (const [cid, info] of Object.entries(DATA.categories)) {
+    if (!mm.expandedGroups.has(info.group)) continue;
+    const evs = catEvents[cid] || [];
+    if (!evs.length) continue;
+    visibleCats.push(cid);
+    add({
+      id: `c:${cid}`, kind: "cat", cid, gid: info.group, label: info.name,
+      count: evs.length, r: 7 + Math.sqrt(evs.length) * 0.6,
+      color: GROUP_META[info.group].color, events: evs,
+      expanded: mm.expandedCats.has(cid),
+    });
+    links.push({ source: `g:${info.group}`, target: `c:${cid}`, dist: 95 });
+  }
+  if (mm.expandedGroups.has("none") && groupEvents.none.length) {
+    add({
+      id: "c:none", kind: "cat", cid: "none", gid: "none", label: "Unkategorisiert",
+      count: groupEvents.none.length, r: 7 + Math.sqrt(groupEvents.none.length) * 0.6,
+      color: GROUP_META.none.color, events: groupEvents.none,
+    });
+    links.push({ source: "g:none", target: "c:none", dist: 95 });
+  }
+
+  // Verfeinerung (Ebene 3, eigene Keyword-Buckets) – geteilte Knoten
+  for (const cid of visibleCats) {
+    if (!mm.expandedCats.has(cid)) continue;
+    const evs = catEvents[cid] || [];
+    const perBucket = {};
+    for (const e of evs) for (const b of e.buckets) (perBucket[b] ??= []).push(e);
+    for (const [bid, bevs] of Object.entries(perBucket)) {
+      if (bevs.length < 3) continue;
+      let node = byId[`b:${bid}`];
+      if (!node) {
+        node = add({
+          id: `b:${bid}`, kind: "bucket", bid, label: BUCKET_BY_ID[bid].name,
+          count: 0, r: 0, color: "#7c8aa0", events: [],
+        });
+      }
+      const known = new Set(node.events);
+      for (const e of bevs) if (!known.has(e)) node.events.push(e);
+      node.count = node.events.length;
+      node.r = 5 + Math.sqrt(node.count) * 0.7;
+      links.push({ source: `c:${cid}`, target: `b:${bid}`, dist: 70 });
+    }
+  }
+
+  // Querverbindungen zwischen Kategorien mit vielen gemeinsamen Events
+  for (let i = 0; i < visibleCats.length; i++) {
+    for (let j = i + 1; j < visibleCats.length; j++) {
+      const a = new Set(catEvents[visibleCats[i]]);
+      let shared = 0;
+      for (const e of catEvents[visibleCats[j]]) if (a.has(e)) shared++;
+      if (shared >= 25) {
+        links.push({
+          source: `c:${visibleCats[i]}`, target: `c:${visibleCats[j]}`,
+          dist: 160, cross: true,
+        });
+      }
+    }
+  }
+  return { nodes, links };
+}
+
+function renderMindmap() {
+  if (!mm.inited) initMindmap();
+  const { width, height } = $("#mindmap-view").getBoundingClientRect();
+  if (!width) return;
+  mm.svg.attr("viewBox", [-width / 2, -height / 2, width, height]);
+
+  const { nodes, links } = mmGraph();
+  for (const n of nodes) {
+    const p = mm.pos.get(n.id);
+    if (p) Object.assign(n, p);
+    if (n.id === "root") { n.fx = 0; n.fy = 0; }
+  }
+
+  const linkSel = mm.g.select(".mm-links").selectAll("line")
+    .data(links, (l) => `${l.source.id || l.source}|${l.target.id || l.target}`)
+    .join("line")
+    .attr("class", (l) => "mm-link" + (l.cross ? " mm-link--cross" : ""))
+    .attr("stroke-width", (l) => (l.cross ? 1.5 : 1.2));
+
+  const nodeSel = mm.g.select(".mm-nodes").selectAll("g.mm-node")
+    .data(nodes, (n) => n.id)
+    .join(
+      (enter) => {
+        const g = enter.append("g").attr("class", "mm-node");
+        g.append("circle");
+        g.append("text").attr("class", "mm-label").attr("text-anchor", "middle");
+        g.append("text").attr("class", "mm-count").attr("text-anchor", "middle");
+        return g;
+      }
+    )
+    .classed("selected", (n) => mm.selectedNode === n.id)
+    .call(d3.drag()
+      .on("start", (ev, d) => { if (!ev.active) mm.sim.alphaTarget(0.2).restart(); d.fx = d.x; d.fy = d.y; })
+      .on("drag", (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
+      .on("end", (ev, d) => { if (!ev.active) mm.sim.alphaTarget(0); if (d.id !== "root") { d.fx = null; d.fy = null; } }))
+    .on("click", (ev, d) => mmClick(d));
+
+  nodeSel.select("circle")
+    .attr("r", (n) => n.r)
+    .attr("fill", (n) => n.color)
+    .attr("fill-opacity", (n) => (n.kind === "bucket" ? 0.85 : 1));
+  nodeSel.select(".mm-label")
+    .attr("dy", (n) => n.r + 13)
+    .attr("font-size", (n) => (n.kind === "root" ? 15 : n.kind === "group" ? 13 : 11))
+    .attr("font-weight", (n) => (n.kind === "bucket" ? 400 : 700))
+    .text((n) => (n.label.length > 30 ? n.label.slice(0, 29) + "…" : n.label));
+  nodeSel.select(".mm-count")
+    .attr("dy", (n) => n.r + 25)
+    .attr("font-size", 10)
+    .text((n) => `${n.count}${n.kind !== "bucket" && n.kind !== "root" ? (n.expanded ? " ▾" : " ▸") : ""}`);
+
+  mm.linkSel = linkSel;
+  mm.nodeSel = nodeSel;
+  mm.sim.nodes(nodes);
+  mm.sim.force("link").links(links);
+  mm.sim.alpha(0.7).restart();
+}
+
+function mmTick() {
+  if (!mm.linkSel) return;
+  mm.linkSel
+    .attr("x1", (l) => l.source.x).attr("y1", (l) => l.source.y)
+    .attr("x2", (l) => l.target.x).attr("y2", (l) => l.target.y);
+  mm.nodeSel.attr("transform", (n) => {
+    mm.pos.set(n.id, { x: n.x, y: n.y });
+    return `translate(${n.x},${n.y})`;
+  });
+}
+
+function mmClick(node) {
+  if (node.kind === "root") return;
+  if (node.kind === "group") {
+    if (mm.expandedGroups.has(node.gid)) {
+      mm.expandedGroups.delete(node.gid);
+      for (const cid of [...mm.expandedCats]) {
+        if (DATA.categories[cid]?.group === node.gid) mm.expandedCats.delete(cid);
+      }
+    } else {
+      mm.expandedGroups.add(node.gid);
+    }
+    renderMindmap();
+    return;
+  }
+  if (node.kind === "cat") {
+    if (mm.selectedNode === node.id && mm.expandedCats.has(node.cid)) {
+      mm.expandedCats.delete(node.cid);
+      mm.selectedNode = null;
+      hidePanel();
+    } else {
+      mm.expandedCats.add(node.cid);
+      mm.selectedNode = node.id;
+      showPanel(node);
+    }
+    renderMindmap();
+    return;
+  }
+  // bucket
+  mm.selectedNode = node.id;
+  showPanel(node);
+  renderMindmap();
+}
+
+let panelNode = null;
+
+function showPanel(node) {
+  panelNode = node;
+  const icon = node.kind === "cat" ? GROUP_META[node.gid]?.icon || "" : "🔎";
+  $("#mm-panel-title").textContent = `${icon} ${node.label} (${node.count})`;
+  const today = todayISO();
+  const dateKey = (e) => ((e.start || "") >= today ? `0${e.start}` : `1${e.typ_bis || "9999"}`);
+  const evs = [...node.events].sort((a, b) => dateKey(a).localeCompare(dateKey(b)));
+  const max = 50;
+  let html = evs.slice(0, max).map((e) => cardHTML(e, DATA.events.indexOf(e))).join("");
+  if (evs.length > max) html += `<div class="empty">… ${evs.length - max} weitere – „In Liste öffnen" zeigt alle.</div>`;
+  $("#mm-panel-list").innerHTML = html;
+  $("#mm-panel-list").scrollTop = 0;
+  $("#mm-panel").hidden = false;
+}
+
+function hidePanel() {
+  $("#mm-panel").hidden = true;
+  panelNode = null;
+  if (mm.selectedNode) { mm.selectedNode = null; if (mm.nodeSel) mm.nodeSel.classed("selected", false); }
+}
+
+function applyPanelSelection(view) {
+  if (!panelNode) return;
+  if (panelNode.kind === "cat") sel = { cat: panelNode.cid, bucket: null, label: panelNode.label };
+  else sel = { cat: null, bucket: panelNode.bid, label: panelNode.label };
+  switchView(view);
+  applyFilters();
+}
+
 /* ---------- Interaktion ---------- */
 
 function bindEvents() {
@@ -312,9 +603,11 @@ function bindEvents() {
     $("#sort").value = "start";
     document.querySelectorAll("#f-region .chip").forEach((c) =>
       c.classList.toggle("active", c.dataset.value === ""));
+    sel = { cat: null, bucket: null, label: "" };
     applyFilters();
   });
 
+  $("#active-cat").addEventListener("click", clearSel);
   $("#more").addEventListener("click", () => renderList(false));
 
   // Card-Klick -> Karte zum Ort
@@ -325,7 +618,7 @@ function bindEvents() {
     if (!marker) return;
     document.querySelectorAll(".card.highlight").forEach((c) => c.classList.remove("highlight"));
     card.classList.add("highlight");
-    if (document.body.dataset.view === "list") switchView("map");
+    switchView("map");
     map.setView(marker.getLatLng(), Math.max(map.getZoom(), 9));
     cluster.zoomToShowLayer(marker, () => marker.openPopup());
   });
@@ -336,7 +629,9 @@ function bindEvents() {
     if (!link) return;
     ev.preventDefault();
     const idx = link.dataset.goto;
-    if (document.body.dataset.view === "map") switchView("list");
+    if (document.body.dataset.view === "map" && window.matchMedia("(max-width: 820px)").matches) {
+      switchView("list");
+    }
     let card = document.querySelector(`.card[data-idx="${idx}"]`);
     while (!card && shown < filtered.length) {  // ggf. nachladen
       renderList(false);
@@ -349,16 +644,27 @@ function bindEvents() {
     }
   });
 
+  $("#tab-mm").addEventListener("click", () => switchView("mm"));
   $("#tab-map").addEventListener("click", () => switchView("map"));
   $("#tab-list").addEventListener("click", () => switchView("list"));
-  if (window.matchMedia("(max-width: 820px)").matches) switchView("map");
+  $("#mm-panel-close").addEventListener("click", hidePanel);
+  $("#mm-to-list").addEventListener("click", () => applyPanelSelection("list"));
+  $("#mm-to-map").addEventListener("click", () => applyPanelSelection("map"));
+  window.addEventListener("resize", () => {
+    if (document.body.dataset.view === "mm") renderMindmap();
+  });
 }
 
 function switchView(view) {
   document.body.dataset.view = view;
+  $("#tab-mm").classList.toggle("active", view === "mm");
   $("#tab-map").classList.toggle("active", view === "map");
   $("#tab-list").classList.toggle("active", view === "list");
+  const p = new URLSearchParams(location.search);
+  if (view === "mm") p.delete("view"); else p.set("view", view);
+  history.replaceState(null, "", p.toString() ? `?${p}` : location.pathname);
   if (view === "map") setTimeout(() => map.invalidateSize(), 50);
+  if (view === "mm") setTimeout(renderMindmap, 0);
 }
 
 init().catch((err) => {

@@ -62,12 +62,28 @@
       <label class="checkbox"><input type="checkbox" id="f-typ" checked> Wiederholbare Veranstaltungen einbeziehen (Typenanerkennung)</label>
       <label class="checkbox"><input type="checkbox" id="f-bbox"> Nur sichtbaren Kartenausschnitt</label>
       <span class="spacer"></span>
+      <span id="active-cat" class="cat-chip" hidden></span>
       <span id="count" class="count"></span>
       <button id="reset" class="reset-btn">Filter zurücksetzen</button>
     </div>
   </section>
 
   <main class="content">
+    <div id="mindmap-view">
+      <svg id="mindmap"></svg>
+      <div id="mm-hint">Kategorie anklicken = Unterthemen aufklappen · Unterthema anklicken = Veranstaltungen ansehen · gestrichelte Linien = thematische Überschneidung</div>
+      <aside id="mm-panel" hidden>
+        <header>
+          <strong id="mm-panel-title"></strong>
+          <button id="mm-panel-close" title="Schließen">✕</button>
+        </header>
+        <div class="panel-actions">
+          <button id="mm-to-list">📋 In Liste öffnen</button>
+          <button id="mm-to-map">🗺️ Auf Karte zeigen</button>
+        </div>
+        <div id="mm-panel-list" class="list"></div>
+      </aside>
+    </div>
     <div id="map"></div>
     <aside class="results">
       <div class="results-head">
@@ -86,13 +102,16 @@
     </aside>
   </main>
 
-  <nav class="mobile-tabs">
-    <button id="tab-map" class="active">🗺️ Karte</button>
+  <nav class="view-tabs">
+    <button id="tab-mm" class="active">🧠 Entdecken</button>
+    <button id="tab-map"><span class="lbl-desktop">🗺️ Karte &amp; Liste</span><span class="lbl-mobile">🗺️ Karte</span></button>
     <button id="tab-list">📋 Liste</button>
   </nav>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="https://unpkg.com/d3@7.9.0/dist/d3.min.js"></script>
+  <script src="taxonomy.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

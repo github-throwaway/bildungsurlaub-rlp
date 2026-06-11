@@ -4,6 +4,7 @@ Alternatives Frontend für die [Bildungsurlaub-Suche des Landes Rheinland-Pfalz]
 
 **Features**
 
+- 🧠 **Entdecken** (Standard-Ansicht): interaktive Mindmap aller Themen — offizielle Kategorien der AWV-Suche als Äste, per Titel-Keywords verfeinerte Unterthemen (Yoga, KI, Resilienz, …) als geteilte Knoten, gestrichelte Querverbindungen zeigen thematische Überschneidungen; Klick öffnet die Veranstaltungen und übernimmt die Auswahl als Filter in Karte/Liste
 - 🗺️ Interaktive Karte (Leaflet + OpenStreetMap) mit Marker-Clustering aller ~6500 anerkannten Veranstaltungen
 - 🔍 Volltextsuche über Titel, Ort und Veranstalter
 - 🎛️ Filter: Region (RLP / anderes Bundesland / Ausland), Land, Themenbereich, Veranstalter, Zeitraum, Dauer (Slider)
@@ -14,9 +15,11 @@ Alternatives Frontend für die [Bildungsurlaub-Suche des Landes Rheinland-Pfalz]
 ## Aufbau
 
 ```
-scraper/scrape.py   # holt + parst die Daten von awv.rlp.de, geocodiert via Nominatim
+scraper/scrape.py     # holt + parst die Daten von awv.rlp.de, taggt die offiziellen
+                      # Unterkategorien (1 Anfrage pro id_stichwort), geocodiert via Nominatim
 scraper/geocache.json # Geocoding-Cache (nur neue Orte werden angefragt)
-docs/               # statisches Frontend (GitHub-Pages-Root)
+docs/                 # statisches Frontend (GitHub-Pages-Root)
+docs/taxonomy.js      # Verfeinerungs-Ebene der Mindmap (Keyword-Buckets)
 docs/data/events.json # generierte Daten
 ```
 

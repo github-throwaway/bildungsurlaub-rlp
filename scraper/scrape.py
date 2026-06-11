@@ -41,10 +41,63 @@ DATE_RE = re.compile(r"(\d{2})\.(\d{2})\.(\d{4})")
 # Reine Online-Veranstaltungen haben keinen geocodierbaren Ort
 NON_PLACES = {"online", "live-online", "webinar", "digital"}
 
+# Offizielle Unterkategorien aus dem id_stichwort-Dropdown der Suchmaske.
+# Pro Kategorie eine eigene Suchanfrage -> Events werden damit getaggt.
+GROUPS = {
+    "bw": "Berufliche Weiterbildung",
+    "gp": "Gesellschaftspolitische Weiterbildung",
+    "ea": "Ehrenamtliche Tätigkeiten",
+}
+CATEGORIES = {
+    "12": ("bw", "Gewerblich-technischer Bereich / Handwerk"),
+    "13": ("bw", "Kaufmännisch-betriebswirtschaftlicher Bereich"),
+    "49": ("bw", "Recht / Steuern"),
+    "14": ("bw", "Erziehung / Soziales / Pädagogik"),
+    "15": ("bw", "Medizin / Pflege"),
+    "48": ("bw", "Gesundheit / Gesundheitsvorsorge"),
+    "16": ("bw", "Mathematisch-naturwissenschaftlicher Bereich"),
+    "17": ("bw", "IT / Digitalisierung"),
+    "50": ("bw", "Umwelt / Ökologie"),
+    "18": ("bw", "Deutsch als Fremdsprache / Integration"),
+    "51": ("bw", "Ausbildereignung / Fachhochschulreife"),
+    "24": ("bw", "Schlüsselqualifikationen"),
+    "25": ("bw", "Sonstiges (beruflich)"),
+    "19": ("bw", "Fremdsprache Englisch"),
+    "20": ("bw", "Fremdsprache Französisch"),
+    "21": ("bw", "Fremdsprache Italienisch"),
+    "22": ("bw", "Fremdsprache Spanisch"),
+    "23": ("bw", "Sonstige Fremdsprachen"),
+    "26": ("gp", "Deutschland"),
+    "27": ("gp", "Europa"),
+    "31": ("gp", "Regionales"),
+    "30": ("gp", "Internationales"),
+    "52": ("gp", "Digitalisierung (gesellschaftlich)"),
+    "33": ("gp", "Wirtschaft"),
+    "34": ("gp", "Soziales / Gesundheit / Pflege"),
+    "35": ("gp", "Arbeitswelt"),
+    "36": ("gp", "Umwelt"),
+    "37": ("gp", "Bildung / Kultur"),
+    "38": ("gp", "Gesellschaft"),
+    "39": ("gp", "Recht / Gleichstellung"),
+    "47": ("gp", "Geschichte"),
+    "28": ("gp", "Dritte Welt / Eine Welt"),
+    "41": ("gp", "Migration / Integration"),
+    "46": ("gp", "Sonstiges (gesellschaftspolitisch)"),
+    "53": ("ea", "Betreuung hilfebedürftiger Menschen"),
+    "54": ("ea", "Arbeit mit Kindern, Jugendlichen, Senioren"),
+    "55": ("ea", "Mitgestaltung des Sozialraums"),
+    "56": ("ea", "Heimatpflege / allgemeine Weiterbildung"),
+    "57": ("ea", "Sport (insb. Übungsleiter)"),
+    "58": ("ea", "Tier-, Natur- und Umweltschutz"),
+    "59": ("ea", "Kirchen / Weltanschauungsgemeinschaften"),
+    "60": ("ea", "Vereinsmanagement"),
+    "61": ("ea", "Öffentliche Ehrenämter"),
+}
 
-def fetch_region(land_id: str) -> str:
+
+def fetch_search(land_id: str = "", id_stichwort: str = "") -> str:
     params = {
-        "id_stichwort": "",
+        "id_stichwort": id_stichwort,
         "date": "",
         "organizer": "",
         "topic": "",
@@ -59,6 +112,10 @@ def fetch_region(land_id: str) -> str:
     )
     resp.raise_for_status()
     return resp.text
+
+
+def event_key(e: dict) -> tuple:
+    return (e["kz"], e["start"], e["ort"], e["title"])
 
 
 def iso_date(match: re.Match) -> str:
@@ -171,12 +228,32 @@ def dedupe(events: list[dict]) -> list[dict]:
     seen = set()
     result = []
     for e in events:
-        key = (e["kz"], e["start"], e["ort"], e["title"])
+        key = event_key(e)
         if key in seen:
             continue
         seen.add(key)
         result.append(e)
     return result
+
+
+def tag_categories(events: list[dict]) -> None:
+    """Taggt Events mit den offiziellen Unterkategorien, indem die Suche
+    einmal pro id_stichwort abgefragt und über event_key zugeordnet wird."""
+    index = {event_key(e): e for e in events}
+    for e in events:
+        e["cats"] = []
+    for cat_id in CATEGORIES:
+        html = fetch_search(id_stichwort=cat_id)
+        tagged = parse_events(html, region="")
+        hits = 0
+        for t in tagged:
+            match = index.get(event_key(t))
+            if match is not None:
+                match["cats"].append(cat_id)
+                hits += 1
+        print(f"  Kategorie {cat_id} ({CATEGORIES[cat_id][1]}): {hits} Events")
+    untagged = sum(1 for e in events if not e["cats"])
+    print(f"Ohne Kategorie: {untagged}/{len(events)} Events")
 
 
 def geocode_places(events: list[dict]) -> dict:
@@ -231,13 +308,16 @@ def main() -> None:
     all_events = []
     for land_id, region in REGIONS.items():
         print(f"Lade Region {region} (land_id={land_id}) ...")
-        html = fetch_region(land_id)
+        html = fetch_search(land_id=land_id)
         events = parse_events(html, region)
         print(f"  {len(events)} Events geparst")
         all_events.extend(events)
 
     all_events = dedupe(all_events)
     print(f"{len(all_events)} Events nach Deduplizierung")
+
+    print("Tagge offizielle Unterkategorien ...")
+    tag_categories(all_events)
 
     # Veranstalter deduplizieren
     organizers = []
@@ -260,6 +340,11 @@ def main() -> None:
             {
                 "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "source": BASE_URL,
+                "groups": GROUPS,
+                "categories": {
+                    cid: {"group": g, "name": name}
+                    for cid, (g, name) in CATEGORIES.items()
+                },
                 "organizers": organizers,
                 "places": places,
                 "events": all_events,
