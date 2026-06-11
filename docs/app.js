@@ -173,8 +173,13 @@ function applyFilters() {
   const bounds = s.bbox ? map.getBounds() : null;
   filtered = DATA.events.filter((e) => matches(e, s, bounds));
 
+  // Konkrete kommende Termine zuerst, danach wiederholbare Veranstaltungen
+  // mit vergangenem Termin (sortiert nach Ende der Typenanerkennung)
+  const today = todayISO();
+  const dateKey = (e) =>
+    (e.start || "") >= today ? `0${e.start}` : `1${e.typ_bis || e.start || "9999"}`;
   const cmp = {
-    start: (a, b) => (a.start || "9999").localeCompare(b.start || "9999"),
+    start: (a, b) => dateKey(a).localeCompare(dateKey(b)),
     tage: (a, b) => (b.tage || 0) - (a.tage || 0),
     ort: (a, b) => a.ort.localeCompare(b.ort, "de"),
     title: (a, b) => a.title.localeCompare(b.title, "de"),
@@ -206,7 +211,7 @@ function cardHTML(e, idx) {
     <h3>${e.title}</h3>
     <div class="meta">
       <span class="badge badge--ort">${flag(e.land)} ${e.ort}${e.land && e.land !== "Deutschland" ? ", " + e.land : ""}</span>
-      <span class="badge badge--datum">📅 ${fmtDate(e.start)} – ${fmtDate(e.end)} · ${e.tage ?? "?"} Tage</span>
+      <span class="badge badge--datum">📅 ${fmtDate(e.start)}${e.end ? " – " + fmtDate(e.end) : ""} · ${e.tage ?? "?"} Tage</span>
       ${e.thema ? `<span class="badge badge--thema">${e.thema}</span>` : ""}
       ${typ}
     </div>
@@ -259,7 +264,7 @@ function popupHTML(ort, land, events) {
   const items = events.slice(0, 15).map((e) => `
     <div class="popup-event">
       <a href="#" data-goto="${DATA.events.indexOf(e)}">${e.title}</a>
-      <div class="pmeta">${fmtDate(e.start)} – ${fmtDate(e.end)} · ${e.tage ?? "?"} Tage · ${DATA.organizers[e.org]?.name || ""}</div>
+      <div class="pmeta">${fmtDate(e.start)}${e.end ? " – " + fmtDate(e.end) : ""} · ${e.tage ?? "?"} Tage · ${DATA.organizers[e.org]?.name || ""}</div>
     </div>`).join("");
   const more = events.length > 15 ? `<div class="pmeta">… und ${events.length - 15} weitere (siehe Liste)</div>` : "";
   return head + items + more;

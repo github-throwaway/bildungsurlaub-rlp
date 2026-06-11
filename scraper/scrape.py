@@ -80,6 +80,11 @@ def parse_termin(text: str) -> dict:
         result["end"] = iso_date(dates[1])
     if "Typenanerkennung" in text and len(dates) > 2:
         result["typ_bis"] = iso_date(dates[-1])
+    # Quelldaten-Tippfehler (Ende vor Start, Jahrhundert-Dreher wie "2109"):
+    # Enddatum verwerfen, Frontend fällt dann aufs Startdatum zurück
+    if result["start"] and result["end"]:
+        if result["end"] < result["start"] or int(result["end"][:4]) > int(result["start"][:4]) + 6:
+            result["end"] = None
     return result
 
 
