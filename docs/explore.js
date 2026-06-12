@@ -4,7 +4,7 @@
 "use strict";
 
 let vizMode = null; // "pack" | "treemap" | "sunburst" | "tree" | "tiles"
-const VIZ_DEFAULT = "pack";
+const VIZ_DEFAULT = "sunburst";
 const VIZ_HINTS = {
   pack: "Blase anklicken = hineinzoomen und Veranstaltungen ansehen · Klick auf den Hintergrund = herauszoomen",
   treemap: "Kachel anklicken = eine Ebene tiefer · Pfad oben = zurück · Blasse Kacheln sind Unterthemen mit Veranstaltungen",
@@ -47,7 +47,7 @@ function buildExploreTree() {
         for (const b of bucketNodes) for (const e of b.events) inBucket.add(e);
         const rest = evs.filter((e) => !inBucket.has(e));
         children = rest.length >= 3
-          ? [...bucketNodes, { id: `r:${cid}`, kind: "rest", cid, gid, name: "Weitere", events: rest }]
+          ? [...bucketNodes, { id: `r:${cid}`, kind: "rest", cid, gid, name: "Sonstige", events: rest }]
           : bucketNodes;
       }
       catNodes.push({
@@ -72,6 +72,39 @@ const KIND_OPACITY = { group: 0.9, cat: 0.62, bucket: 0.4, rest: 0.28 };
 
 function vizLabel(d) {
   return d.kind === "group" ? `${d.icon} ${d.name}` : d.name;
+}
+
+/* Wortweiser Umbruch auf maximal maxLines Zeilen, Rest mit Ellipse.
+   Überlange Wörter werden mit Bindestrich hart getrennt. */
+function wrapWords(text, maxChars, maxLines = 2) {
+  const words = text.split(/\s+/).flatMap((w) => {
+    if (w.length <= maxChars) return [w];
+    const chunks = [];
+    for (let i = 0; i < w.length; i += maxChars - 1) {
+      const chunk = w.slice(i, i + maxChars - 1);
+      chunks.push(i + maxChars - 1 < w.length && !chunk.endsWith("-") ? chunk + "-" : chunk);
+    }
+    return chunks;
+  });
+  const lines = [];
+  let cur = "";
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    const candidate = cur ? `${cur} ${w}` : w;
+    if (candidate.length <= maxChars || !cur) {
+      cur = candidate;
+    } else {
+      lines.push(cur);
+      cur = w;
+      if (lines.length === maxLines - 1) {
+        const restWords = [cur, ...words.slice(i + 1)].join(" ");
+        lines.push(restWords.length > maxChars ? restWords.slice(0, maxChars - 1) + "…" : restWords);
+        return lines;
+      }
+    }
+  }
+  if (cur) lines.push(cur.length > maxChars ? cur.slice(0, maxChars - 1) + "…" : cur);
+  return lines;
 }
 
 /* ---------- Umschalter / Dispatcher ---------- */
@@ -338,17 +371,25 @@ function renderSunburstViz() {
     .on("click", clicked);
   path.append("title").text((d) => `${vizLabel(d.data)} (${d.data.events.length})`);
 
+  // Labels: radial ausgerichtet, bei Bedarf auf bis zu 3 Zeilen umgebrochen,
+  // damit der Text innerhalb des Rings bleibt
+  const maxChars = Math.max(8, Math.floor((radius - 14) / 5.6));
   const label = g.selectAll("text")
     .data(root.descendants().slice(1))
     .join("text")
     .attr("class", "sb-label")
-    .attr("dy", "0.35em")
-    .attr("fill-opacity", (d) => +labelVisible(d.current))
-    .attr("transform", (d) => labelTransform(d.current))
-    .text((d) => {
-      const n = vizLabel(d.data);
-      return n.length > 22 ? n.slice(0, 21) + "…" : n;
-    });
+    .each(function (d) {
+      d.lines = wrapWords(vizLabel(d.data), maxChars, 3);
+      const tx = d3.select(this);
+      d.lines.forEach((line, i) => {
+        tx.append("tspan")
+          .attr("x", 0)
+          .attr("dy", i === 0 ? `${0.35 - (d.lines.length - 1) * 0.55}em` : "1.1em")
+          .text(line);
+      });
+    })
+    .attr("fill-opacity", (d) => +labelVisible(d.current, d.lines.length))
+    .attr("transform", (d) => labelTransform(d.current));
 
   let parent = root;
   const center = g.append("circle")
@@ -360,9 +401,19 @@ function renderSunburstViz() {
     .on("click", clicked);
   const centerLabel = g.append("text")
     .attr("class", "sb-center")
-    .attr("text-anchor", "middle")
-    .attr("dy", "0.35em")
-    .text("Alle Themen");
+    .attr("text-anchor", "middle");
+  setCenterLabel("Alle Themen");
+
+  function setCenterLabel(text) {
+    centerLabel.selectAll("tspan").remove();
+    const lines = wrapWords(text, Math.max(10, Math.floor((radius * 2 - 24) / 7.5)), 3);
+    lines.forEach((line, i) => {
+      centerLabel.append("tspan")
+        .attr("x", 0)
+        .attr("dy", i === 0 ? `${0.35 - (lines.length - 1) * 0.6}em` : "1.2em")
+        .text(line);
+    });
+  }
 
   function clicked(ev, p) {
     if (p.data.id) {
@@ -374,7 +425,7 @@ function renderSunburstViz() {
     }
     parent = p.parent || root;
     center.datum(parent);
-    centerLabel.text(p.data.id ? vizLabel(p.data) : "Alle Themen");
+    setCenterLabel(p.data.id ? vizLabel(p.data) : "Alle Themen");
 
     root.each((d) => (d.target = {
       x0: Math.max(0, Math.min(1, (d.x0 - p.x0) / (p.x1 - p.x0))) * 2 * Math.PI,
@@ -393,13 +444,16 @@ function renderSunburstViz() {
       .attr("pointer-events", (d) => (arcVisible(d.target) ? "auto" : "none"))
       .attrTween("d", (d) => () => arc(d.current));
     label.transition(t)
-      .attr("fill-opacity", (d) => +labelVisible(d.target))
+      .attr("fill-opacity", (d) => +labelVisible(d.target, d.lines.length))
       .attrTween("transform", (d) => () => labelTransform(d.current));
   }
 
   function arcVisible(d) { return d.y1 <= 4 && d.y0 >= 1 && d.x1 > d.x0; }
-  function labelVisible(d) {
-    return d.y1 <= 4 && d.y0 >= 1 && (d.y1 - d.y0) * (d.x1 - d.x0) > 0.04;
+  function labelVisible(d, lines = 1) {
+    if (d.y1 > 4 || d.y0 < 1) return false;
+    // Höhe des Segments (Bogenlänge auf mittlerem Radius) muss zur Zeilenzahl passen
+    const arcPx = (d.x1 - d.x0) * ((d.y0 + d.y1) / 2) * radius;
+    return arcPx > lines * 12 + 4;
   }
   function labelTransform(d) {
     const x = ((d.x0 + d.x1) / 2) * 180 / Math.PI;
