@@ -10,6 +10,7 @@ let map, cluster;
 let markersByPlace = {};  // "Ort|Land" -> Marker
 let sel = null;           // Themen-Auswahl: {type:"group"|"cat"|"bucket"|"rest", gid?, cid?, bid?, label}
 let onlyFavs = false;     // Merkliste-Filter aktiv
+let placeFilter = null;   // "Ort|Land" – nur Veranstaltungen dieses Ortes
 const FAVS = new Set(JSON.parse(localStorage.getItem("favs") || "[]"));
 const CAT_SHOWN_BUCKETS = {}; // cid -> Set(bid) mit >=3 Events (für „Sonstige"-Filter)
 
@@ -156,6 +157,7 @@ function restoreFromURL() {
   if (p.get("typ") === "0") $("#f-typ").checked = false;
   if (p.get("sort")) $("#sort").value = p.get("sort");
   if (p.get("fav")) onlyFavs = true;
+  if (p.get("ort")) placeFilter = p.get("ort");
   const region = p.get("region") || "";
   for (const chip of document.querySelectorAll("#f-region .chip")) {
     chip.classList.toggle("active", chip.dataset.value === region);
@@ -188,6 +190,7 @@ function syncURL(s) {
   if (!s.typ) p.set("typ", "0");
   if (s.sort !== "start") p.set("sort", s.sort);
   if (onlyFavs) p.set("fav", "1");
+  if (placeFilter) p.set("ort", placeFilter);
   if (sel) {
     if (sel.type === "group") p.set("grp", sel.gid);
     else { p.set("cat", sel.cid); if (sel.type === "bucket") p.set("bucket", sel.bid); if (sel.type === "rest") p.set("rest", "1"); }
@@ -202,6 +205,7 @@ function syncURL(s) {
 /* ---------- Filtern + Sortieren ---------- */
 
 function matchesBase(e, s, bounds) {
+  if (placeFilter && `${e.ort}|${e.land}` !== placeFilter) return false;
   if (s.region && e.region !== s.region) return false;
   if (s.land && e.land !== s.land) return false;
   if (s.org && (DATA.organizers[e.org]?.name || "") !== s.org) return false;
@@ -278,6 +282,10 @@ function applyFilters() {
   chip.hidden = !showChip;
   if (showChip) chip.textContent = `🧠 ${sel.label} ✕`;
 
+  const pchip = $("#active-place");
+  pchip.hidden = !placeFilter;
+  if (placeFilter) pchip.textContent = `📍 ${placeFilter.split("|")[0]} ✕`;
+
   syncURL(s);
   renderList(true);
   renderMarkers();
@@ -292,6 +300,12 @@ function setSelection(newSel) {
 
 function clearSel() {
   setSelection(null);
+}
+
+function setPlaceFilter(key) {
+  placeFilter = key;
+  if (document.body.dataset.view === "mm") switchView("list");
+  applyFilters();
 }
 
 /* ---------- Merkliste (Favoriten) ---------- */
@@ -337,7 +351,7 @@ function cardHTML(e, idx) {
       <button class="fav-btn ${faved ? "on" : ""}" data-fav="${id}" title="Zur Merkliste hinzufügen" aria-label="Merken">${faved ? "★" : "☆"}</button>
     </div>
     <div class="meta">
-      <span class="badge badge--ort">${flag(e.land)} ${e.ort}${e.land && e.land !== "Deutschland" ? ", " + e.land : ""}</span>
+      <button class="badge badge--ort place-filter" data-place="${e.ort}|${e.land}" title="Nur Veranstaltungen an diesem Ort zeigen">${flag(e.land)} ${e.ort}${e.land && e.land !== "Deutschland" ? ", " + e.land : ""}</button>
       <span class="badge badge--datum">📅 ${fmtDate(e.start)}${e.end ? " – " + fmtDate(e.end) : ""} · ${e.tage ?? "?"} Tage</span>
       ${e.thema ? `<span class="badge badge--thema">${e.thema}</span>` : ""}
       ${typ}
@@ -472,6 +486,8 @@ function bindEvents() {
 
   $("#f-fav").addEventListener("click", () => {
     onlyFavs = !onlyFavs;
+    // Aus der Entdecken-Ansicht zur Liste/Karte wechseln, damit die Merkliste sichtbar wird
+    if (onlyFavs && document.body.dataset.view === "mm") switchView("map");
     applyFilters();
   });
 
@@ -482,6 +498,20 @@ function bindEvents() {
     ev.preventDefault();
     ev.stopPropagation();
     toggleFav(btn.dataset.fav);
+  });
+
+  // Orts-Badge anklicken -> Liste auf diesen Ort filtern (Liste + Panel)
+  document.addEventListener("click", (ev) => {
+    const pb = ev.target.closest(".place-filter");
+    if (!pb) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    setPlaceFilter(pb.dataset.place);
+  });
+
+  $("#active-place").addEventListener("click", () => {
+    placeFilter = null;
+    applyFilters();
   });
 
   $("#reset").addEventListener("click", () => {
@@ -499,6 +529,7 @@ function bindEvents() {
       c.classList.toggle("active", c.dataset.value === ""));
     sel = null;
     onlyFavs = false;
+    placeFilter = null;
     applyFilters();
   });
 
@@ -508,7 +539,7 @@ function bindEvents() {
   // Card-Klick -> Karte zum Ort
   $("#list").addEventListener("click", (ev) => {
     const card = ev.target.closest(".card");
-    if (!card || ev.target.closest("a") || ev.target.closest(".fav-btn")) return;
+    if (!card || ev.target.closest("a") || ev.target.closest(".fav-btn") || ev.target.closest(".place-filter")) return;
     const marker = markersByPlace[card.dataset.place];
     if (!marker) return;
     document.querySelectorAll(".card.highlight").forEach((c) => c.classList.remove("highlight"));

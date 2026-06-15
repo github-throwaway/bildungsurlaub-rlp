@@ -164,6 +164,8 @@ body {
   white-space: nowrap;
 }
 .badge--ort { background: #eef4ff; border-color: #c9dbff; color: #2456a8; }
+button.badge { font: inherit; cursor: pointer; }
+.badge--ort.place-filter:hover { background: #d6e4ff; border-color: #93b4f0; }
 .badge--datum { background: #f0faf1; border-color: #c8e8cc; color: #1f7a33; }
 .badge--typ { background: #fff7e8; border-color: #f3dfae; color: #94660a; }
 .badge--thema { background: #f7eef9; border-color: #e3c8e8; color: #7a2f8a; }
@@ -190,6 +192,9 @@ body {
 .empty { text-align: center; color: var(--muted); padding: 40px 10px; }
 
 /* ---------- Karte / Popups ---------- */
+/* Verhindert hauchdünne weiße Linien zwischen Kacheln auf HiDPI-/Retina-
+   Displays: 0,5 px Überlappung schließt die Subpixel-Lücken. */
+.leaflet-tile { width: 256.5px !important; height: 256.5px !important; }
 .leaflet-popup-content { margin: 10px 14px; max-height: 260px; overflow-y: auto; }
 .popup-event { padding: 6px 0; border-bottom: 1px solid var(--border); }
 .popup-event:last-child { border-bottom: none; }
@@ -341,6 +346,8 @@ body[data-view="mm"] #map, body[data-view="mm"] .results { display: none; }
   cursor: pointer;
 }
 .cat-chip:hover { background: var(--accent-dark); }
+.cat-chip--place { background: #2456a8; }
+.cat-chip--place:hover { background: #1b4080; }
 
 /* ---------- View-Tabs ---------- */
 .view-tabs {
