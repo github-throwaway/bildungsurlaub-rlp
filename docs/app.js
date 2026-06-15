@@ -3,14 +3,20 @@
 
 const PAGE_SIZE = 60;
 let DATA = null;          // { groups, categories, organizers, places, events }
-let filtered = [];        // aktuell gefilterte Events (inkl. Kategorie/Unterthema)
-let mmEvents = [];        // wie filtered, aber ohne Kategorie/Unterthema (Basis der Mindmap)
+let filtered = [];        // aktuell gefilterte Events (inkl. Auswahl + Merkliste)
+let mmEvents = [];        // Basis der Entdecken-Ansicht (ohne Themen-Auswahl)
 let shown = 0;            // Anzahl gerenderter Cards
 let map, cluster;
 let markersByPlace = {};  // "Ort|Land" -> Marker
-let sel = { bucket: null, label: "" }; // Unterthema-Auswahl aus der Mindmap
+let sel = null;           // Themen-Auswahl: {type:"group"|"cat"|"bucket"|"rest", gid?, cid?, bid?, label}
+let onlyFavs = false;     // Merkliste-Filter aktiv
+const FAVS = new Set(JSON.parse(localStorage.getItem("favs") || "[]"));
+const CAT_SHOWN_BUCKETS = {}; // cid -> Set(bid) mit >=3 Events (für „Sonstige"-Filter)
 
 const $ = (sel) => document.querySelector(sel);
+const eventId = (e) => `${e.kz}|${e.start}|${e.ort}`;
+const awvLink = (kz) =>
+  `https://awv.rlp.de/suche/?id_stichwort=&date=&organizer=&topic=&land_id=&ort=&veranstaltungsdauer=&akz=${encodeURIComponent(kz)}&submit=1`;
 
 const FLAGS = {
   "Deutschland": "🇩🇪", "Frankreich": "🇫🇷", "Niederlande": "🇳🇱", "Italien": "🇮🇹",
@@ -43,12 +49,14 @@ async function init() {
     e.cats = e.cats || [];
     e.buckets = bucketize(e);
   }
+  computeCatBuckets();
 
   initMap();
   buildFilterOptions();
   restoreFromURL();
   bindEvents();
   bindVizSwitcher();
+  updateFavCount();
   switchView(new URLSearchParams(location.search).get("view") || "mm");
   applyFilters();
 }
@@ -84,6 +92,7 @@ function buildFilterOptions() {
   fill($("#f-org"), orgs);
 
   // Kategorie-Dropdown: alle offiziellen Unterkategorien, thematisch gruppiert
+  // (gruppiert nach denselben Themen-Gruppen wie die Entdecken-Ansicht)
   const catSel = $("#f-cat");
   for (const ginfo of Object.values(CAT_GROUPS)) {
     const og = document.createElement("optgroup");
@@ -100,6 +109,23 @@ function buildFilterOptions() {
   }
 }
 
+// Pro Kategorie die Unterthemen mit >=3 Events – damit lässt sich der
+// „Sonstige"-Rest einer Kategorie exakt reproduzieren (für den Filter).
+function computeCatBuckets() {
+  const counts = {};
+  for (const e of DATA.events) {
+    for (const c of e.cats) {
+      const m = (counts[c] ??= {});
+      for (const b of e.buckets) m[b] = (m[b] || 0) + 1;
+    }
+  }
+  for (const cid in counts) {
+    CAT_SHOWN_BUCKETS[cid] = new Set(
+      Object.entries(counts[cid]).filter(([, n]) => n >= 3).map(([b]) => b)
+    );
+  }
+}
+
 /* ---------- Filter-Zustand ---------- */
 
 function getState() {
@@ -109,7 +135,6 @@ function getState() {
     text: $("#f-text").value.trim().toLowerCase(),
     region: $("#f-region .chip.active")?.dataset.value || "",
     land: $("#f-land").value,
-    cat: $("#f-cat").value,
     org: $("#f-org").value,
     von: $("#f-von").value,
     bis: $("#f-bis").value,
@@ -124,21 +149,31 @@ function restoreFromURL() {
   const p = new URLSearchParams(location.search);
   if (p.get("q")) $("#f-text").value = p.get("q");
   if (p.get("land")) $("#f-land").value = p.get("land");
-  if (p.get("cat")) $("#f-cat").value = p.get("cat");
   if (p.get("org")) $("#f-org").value = p.get("org");
   $("#f-von").value = p.get("von") || todayISO();
   if (p.get("bis")) $("#f-bis").value = p.get("bis");
   if (p.get("dauer")) $("#f-dauer").value = p.get("dauer");
   if (p.get("typ") === "0") $("#f-typ").checked = false;
   if (p.get("sort")) $("#sort").value = p.get("sort");
+  if (p.get("fav")) onlyFavs = true;
   const region = p.get("region") || "";
   for (const chip of document.querySelectorAll("#f-region .chip")) {
     chip.classList.toggle("active", chip.dataset.value === region);
   }
-  if (p.get("bucket") && BUCKET_BY_ID[p.get("bucket")]) {
-    sel.bucket = p.get("bucket");
-    sel.label = BUCKET_BY_ID[sel.bucket].name;
+  // Themen-Auswahl wiederherstellen
+  const grp = p.get("grp"), cat = p.get("cat"), bucket = p.get("bucket");
+  if (grp && CAT_GROUPS[grp]) {
+    sel = { type: "group", gid: grp, label: `${CAT_GROUPS[grp].icon} ${CAT_GROUPS[grp].name}` };
+  } else if (cat && DATA.categories[cat]) {
+    if (bucket && BUCKET_BY_ID[bucket]) {
+      sel = { type: "bucket", cid: cat, bid: bucket, label: BUCKET_BY_ID[bucket].name };
+    } else if (p.get("rest")) {
+      sel = { type: "rest", cid: cat, label: `${DATA.categories[cat].name} · Sonstige` };
+    } else {
+      sel = { type: "cat", cid: cat, label: DATA.categories[cat].name };
+    }
   }
+  if (sel && sel.type !== "group") $("#f-cat").value = sel.cid;
 }
 
 function syncURL(s) {
@@ -146,14 +181,17 @@ function syncURL(s) {
   if (s.text) p.set("q", s.text);
   if (s.region) p.set("region", s.region);
   if (s.land) p.set("land", s.land);
-  if (s.cat) p.set("cat", s.cat);
   if (s.org) p.set("org", s.org);
   if (s.von && s.von !== todayISO()) p.set("von", s.von);
   if (s.bis) p.set("bis", s.bis);
   if ($("#f-dauer").value) p.set("dauer", $("#f-dauer").value);
   if (!s.typ) p.set("typ", "0");
   if (s.sort !== "start") p.set("sort", s.sort);
-  if (sel.bucket) p.set("bucket", sel.bucket);
+  if (onlyFavs) p.set("fav", "1");
+  if (sel) {
+    if (sel.type === "group") p.set("grp", sel.gid);
+    else { p.set("cat", sel.cid); if (sel.type === "bucket") p.set("bucket", sel.bid); if (sel.type === "rest") p.set("rest", "1"); }
+  }
   if (vizMode && vizMode !== VIZ_DEFAULT) p.set("viz", vizMode);
   const view = document.body.dataset.view;
   if (view && view !== "mm") p.set("view", view);
@@ -195,13 +233,26 @@ function matchesBase(e, s, bounds) {
   return true;
 }
 
+// Themen-Auswahl (Gruppe / Kategorie / Unterthema / „Sonstige")
+function selMatch(e) {
+  if (!sel) return true;
+  switch (sel.type) {
+    case "group":  return e.cats.some((c) => GROUP_OF_CAT[c] === sel.gid);
+    case "cat":    return e.cats.includes(sel.cid);
+    case "bucket": return e.cats.includes(sel.cid) && e.buckets.includes(sel.bid);
+    case "rest":   return e.cats.includes(sel.cid) &&
+                          !e.buckets.some((b) => CAT_SHOWN_BUCKETS[sel.cid]?.has(b));
+  }
+  return true;
+}
+
 function applyFilters() {
   const s = getState();
   const bounds = s.bbox ? map.getBounds() : null;
   mmEvents = DATA.events.filter((e) => matchesBase(e, s, bounds));
   filtered = mmEvents.filter((e) => {
-    if (s.cat && !e.cats.includes(s.cat)) return false;
-    if (sel.bucket && !e.buckets.includes(sel.bucket)) return false;
+    if (!selMatch(e)) return false;
+    if (onlyFavs && !FAVS.has(eventId(e))) return false;
     return true;
   });
 
@@ -219,10 +270,13 @@ function applyFilters() {
   filtered.sort(cmp);
 
   $("#count").textContent = `${filtered.length} Treffer`;
+  $("#f-fav").classList.toggle("active", onlyFavs);
 
+  // Chip zeigt nur Auswahlen, die das Kategorie-Dropdown nicht selbst abbildet
   const chip = $("#active-cat");
-  chip.hidden = !sel.bucket;
-  if (!chip.hidden) chip.textContent = `🧠 ${sel.label} ✕`;
+  const showChip = sel && sel.type !== "cat";
+  chip.hidden = !showChip;
+  if (showChip) chip.textContent = `🧠 ${sel.label} ✕`;
 
   syncURL(s);
   renderList(true);
@@ -230,15 +284,44 @@ function applyFilters() {
   if (document.body.dataset.view === "mm") renderMindmap();
 }
 
-function clearSel() {
-  sel = { bucket: null, label: "" };
+function setSelection(newSel) {
+  sel = newSel;
+  $("#f-cat").value = sel && sel.type !== "group" ? sel.cid : "";
   applyFilters();
+}
+
+function clearSel() {
+  setSelection(null);
+}
+
+/* ---------- Merkliste (Favoriten) ---------- */
+
+function toggleFav(id) {
+  if (FAVS.has(id)) FAVS.delete(id); else FAVS.add(id);
+  localStorage.setItem("favs", JSON.stringify([...FAVS]));
+  syncFavButtons();
+  updateFavCount();
+  if (onlyFavs) applyFilters();
+}
+
+function syncFavButtons() {
+  for (const b of document.querySelectorAll(".fav-btn")) {
+    const on = FAVS.has(b.dataset.fav);
+    b.classList.toggle("on", on);
+    b.textContent = on ? "★" : "☆";
+  }
+}
+
+function updateFavCount() {
+  $("#f-fav-count").textContent = FAVS.size;
 }
 
 /* ---------- Liste ---------- */
 
 function cardHTML(e, idx) {
   const org = DATA.organizers[e.org] || {};
+  const id = eventId(e);
+  const faved = FAVS.has(id);
   const typ = e.typ_bis
     ? `<span class="badge badge--typ" title="Typenanerkennung: Veranstalter darf bis ${fmtDate(e.typ_bis)} beliebig oft wiederholen – Folgetermine direkt erfragen">🔁 wiederholbar bis ${fmtDate(e.typ_bis)}</span>`
     : "";
@@ -246,9 +329,13 @@ function cardHTML(e, idx) {
     org.web ? `<a href="${org.web}" target="_blank" rel="noopener">Website</a>` : "",
     org.mail ? `<a href="mailto:${org.mail}">E-Mail</a>` : "",
     org.tel ? `<a href="tel:${org.tel.replace(/[^\d+]/g, "")}">${org.tel}</a>` : "",
+    `<a href="${awvLink(e.kz)}" target="_blank" rel="noopener" class="awv-link" title="Originaleintrag auf awv.rlp.de öffnen">AWV-Eintrag ↗</a>`,
   ].filter(Boolean).join(" ");
   return `<article class="card" data-idx="${idx}" data-place="${e.ort}|${e.land}">
-    <h3>${e.title}</h3>
+    <div class="card-head">
+      <h3>${e.title}</h3>
+      <button class="fav-btn ${faved ? "on" : ""}" data-fav="${id}" title="Zur Merkliste hinzufügen" aria-label="Merken">${faved ? "★" : "☆"}</button>
+    </div>
     <div class="meta">
       <span class="badge badge--ort">${flag(e.land)} ${e.ort}${e.land && e.land !== "Deutschland" ? ", " + e.land : ""}</span>
       <span class="badge badge--datum">📅 ${fmtDate(e.start)}${e.end ? " – " + fmtDate(e.end) : ""} · ${e.tage ?? "?"} Tage</span>
@@ -321,7 +408,6 @@ function showPanel(d) {
   panelNode = d;
   const icon = { cat: CAT_GROUPS[d.gid]?.icon, group: d.icon, bucket: "🔎", rest: "📚" }[d.kind] || "📋";
   $("#mm-panel-title").textContent = `${icon} ${d.name} (${d.events.length})`;
-  $("#mm-panel .panel-actions").style.display = d.cid ? "" : "none";
   const today = todayISO();
   const dateKey = (e) => ((e.start || "") >= today ? `0${e.start}` : `1${e.typ_bis || "9999"}`);
   const evs = [...d.events].sort((a, b) => dateKey(a).localeCompare(dateKey(b)));
@@ -339,14 +425,20 @@ function hidePanel() {
   vizClearSelection();
 }
 
+function selFromNode(d) {
+  switch (d.kind) {
+    case "group":  return { type: "group", gid: d.gid, label: `${d.icon} ${d.name}` };
+    case "cat":    return { type: "cat", cid: d.cid, label: d.name };
+    case "bucket": return { type: "bucket", cid: d.cid, bid: d.bid, label: d.name };
+    case "rest":   return { type: "rest", cid: d.cid, label: `${DATA.categories[d.cid].name} · Sonstige` };
+  }
+  return null;
+}
+
 function applyPanelSelection(view) {
-  if (!panelNode || !panelNode.cid) return;
-  $("#f-cat").value = panelNode.cid;
-  sel = panelNode.kind === "bucket"
-    ? { bucket: panelNode.bid, label: panelNode.name }
-    : { bucket: null, label: "" };
+  if (!panelNode) return;
+  setSelection(selFromNode(panelNode));
   switchView(view);
-  applyFilters();
 }
 
 /* ---------- Interaktion ---------- */
@@ -363,9 +455,34 @@ function bindEvents() {
     });
   }
 
-  for (const id of ["#f-land", "#f-cat", "#f-org", "#f-von", "#f-bis", "#f-dauer", "#f-typ", "#f-bbox", "#sort"]) {
+  for (const id of ["#f-land", "#f-org", "#f-von", "#f-bis", "#f-dauer", "#f-typ", "#f-bbox", "#sort"]) {
     $(id).addEventListener("change", applyFilters);
   }
+
+  // Kategorie-Dropdown ist eine Themen-Auswahl wie die Entdecken-Ansicht
+  $("#f-cat").addEventListener("change", () => {
+    const v = $("#f-cat").value;
+    setSelection(v ? { type: "cat", cid: v, label: DATA.categories[v].name } : null);
+  });
+
+  $("#filter-toggle").addEventListener("click", () => {
+    const open = document.body.classList.toggle("show-filters");
+    $("#filter-toggle").setAttribute("aria-expanded", open);
+  });
+
+  $("#f-fav").addEventListener("click", () => {
+    onlyFavs = !onlyFavs;
+    applyFilters();
+  });
+
+  // Stern (Merken) – delegiert, funktioniert in Liste und Panel
+  document.addEventListener("click", (ev) => {
+    const btn = ev.target.closest(".fav-btn");
+    if (!btn) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    toggleFav(btn.dataset.fav);
+  });
 
   $("#reset").addEventListener("click", () => {
     $("#f-text").value = "";
@@ -380,7 +497,8 @@ function bindEvents() {
     $("#sort").value = "start";
     document.querySelectorAll("#f-region .chip").forEach((c) =>
       c.classList.toggle("active", c.dataset.value === ""));
-    sel = { bucket: null, label: "" };
+    sel = null;
+    onlyFavs = false;
     applyFilters();
   });
 
@@ -390,7 +508,7 @@ function bindEvents() {
   // Card-Klick -> Karte zum Ort
   $("#list").addEventListener("click", (ev) => {
     const card = ev.target.closest(".card");
-    if (!card || ev.target.closest("a")) return;
+    if (!card || ev.target.closest("a") || ev.target.closest(".fav-btn")) return;
     const marker = markersByPlace[card.dataset.place];
     if (!marker) return;
     document.querySelectorAll(".card.highlight").forEach((c) => c.classList.remove("highlight"));

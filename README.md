@@ -4,13 +4,15 @@ Alternatives Frontend für die [Bildungsurlaub-Suche des Landes Rheinland-Pfalz]
 
 **Features**
 
-- 🧠 **Entdecken** (Standard-Ansicht): die Themen-Hierarchie — 8 Gruppen (Sprachen gebündelt, Gesundheit, Beruf, …) → offizielle Kategorien der AWV-Suche → per Titel-Keywords verfeinerte Unterthemen (Yoga, KI, Resilienz, …) — in **fünf umschaltbaren Darstellungen**: 🫧 zoombare Bubbles (Standard), 🟦 Treemap mit Drill-down, ☀️ Sunburst, 🌳 aufklappbarer Baum mit Querverbindungen, 🗂️ Kachel-Browser. Klick öffnet die Veranstaltungen und übernimmt die Auswahl als Filter in Karte/Liste; die gewählte Darstellung wird gemerkt
+- 🧠 **Entdecken** (Standard-Ansicht): die Themen-Hierarchie — 8 Gruppen (Sprachen gebündelt, Gesundheit, Beruf, …) → offizielle Kategorien der AWV-Suche → per Titel-Keywords verfeinerte Unterthemen (Yoga, KI, Resilienz, …) — in **fünf umschaltbaren Darstellungen**: ☀️ Sunburst (Standard), 🫧 zoombare Bubbles, 🟦 Treemap mit Drill-down, 🌳 aufklappbarer Baum mit Querverbindungen, 🗂️ Kachel-Browser. Jeder Ring/jede Ebene öffnet die Veranstaltungen und übernimmt die Auswahl als Filter in Karte/Liste; die gewählte Darstellung wird gemerkt
 - 🗺️ Interaktive Karte (Leaflet + OpenStreetMap) mit Marker-Clustering aller ~6500 anerkannten Veranstaltungen
+- ⭐ **Merkliste**: Veranstaltungen per Stern merken (lokal gespeichert), per „★"-Filter nur Gemerkte zeigen
+- 🔗 **Backlink** je Veranstaltung zum Originaleintrag auf awv.rlp.de (über die Anerkennungskennziffer)
 - 🔍 Volltextsuche über Titel, Ort und Veranstalter
 - 🎛️ Filter: Region (RLP / anderes Bundesland / Ausland), Land, alle 43 offiziellen Kategorien (thematisch gruppiert), Veranstalter, Zeitraum, Dauer
 - 🔁 Berücksichtigt Typenanerkennungen (wiederholbare Veranstaltungen)
-- 🔗 Filter landen in der URL → Ansichten sind teilbar
-- 📱 Responsive (mobil: Karte/Liste als Tabs)
+- 🔗 Filter + Auswahl landen in der URL → Ansichten sind teilbar
+- 📱 Für Mobilgeräte optimiert (aufklappbare Filter, Bottom-Sheet, Karte/Liste als Tabs)
 
 ## Aufbau
 

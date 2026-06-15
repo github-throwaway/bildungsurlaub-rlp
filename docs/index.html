@@ -20,66 +20,73 @@
   </header>
 
   <section class="filters" id="filters">
-    <div class="filter-row">
+    <div class="filter-row filter-row--primary">
       <input type="search" id="f-text" class="search-input" placeholder="🔍 Suche in Titel, Ort, Veranstalter …" autocomplete="off">
-      <div class="chip-group" id="f-region">
-        <button class="chip active" data-value="">Alle Regionen</button>
-        <button class="chip" data-value="rlp">Rheinland-Pfalz</button>
-        <button class="chip" data-value="bundesland">Anderes Bundesland</button>
-        <button class="chip" data-value="ausland">Ausland</button>
-      </div>
-    </div>
-    <div class="filter-row">
-      <label class="field">
-        <span>Land</span>
-        <select id="f-land"><option value="">Alle Länder</option></select>
-      </label>
-      <label class="field">
-        <span>Kategorie</span>
-        <select id="f-cat"><option value="">Alle Kategorien</option></select>
-      </label>
-      <label class="field">
-        <span>Veranstalter</span>
-        <select id="f-org"><option value="">Alle Veranstalter</option></select>
-      </label>
-      <label class="field">
-        <span>Von</span>
-        <input type="date" id="f-von">
-      </label>
-      <label class="field">
-        <span>Bis</span>
-        <input type="date" id="f-bis">
-      </label>
-      <label class="field">
-        <span>Dauer</span>
-        <select id="f-dauer">
-          <option value="">Beliebig</option>
-          <option value="1-2">1–2 Tage</option>
-          <option value="3-3">3 Tage</option>
-          <option value="4-5">4–5 Tage</option>
-          <option value="6-10">6–10 Tage</option>
-          <option value="11-99">Mehr als 10 Tage</option>
-        </select>
-      </label>
-    </div>
-    <div class="filter-row filter-row--meta">
-      <label class="checkbox"><input type="checkbox" id="f-typ" checked> Wiederholbare Veranstaltungen einbeziehen (Typenanerkennung)</label>
-      <label class="checkbox"><input type="checkbox" id="f-bbox"> Nur sichtbaren Kartenausschnitt</label>
+      <button id="filter-toggle" class="filter-toggle" aria-expanded="false">⚙ Filter</button>
       <span class="spacer"></span>
       <span id="active-cat" class="cat-chip" hidden></span>
+      <button id="f-fav" class="fav-toggle" title="Nur gemerkte Veranstaltungen zeigen">★ <span id="f-fav-count">0</span></button>
       <span id="count" class="count"></span>
-      <button id="reset" class="reset-btn">Filter zurücksetzen</button>
+    </div>
+    <div class="filter-advanced" id="filter-advanced">
+      <div class="filter-row">
+        <div class="chip-group" id="f-region">
+          <button class="chip active" data-value="">Alle Regionen</button>
+          <button class="chip" data-value="rlp">Rheinland-Pfalz</button>
+          <button class="chip" data-value="bundesland">Anderes Bundesland</button>
+          <button class="chip" data-value="ausland">Ausland</button>
+        </div>
+      </div>
+      <div class="filter-row">
+        <label class="field">
+          <span>Land</span>
+          <select id="f-land"><option value="">Alle Länder</option></select>
+        </label>
+        <label class="field">
+          <span>Kategorie</span>
+          <select id="f-cat"><option value="">Alle Kategorien</option></select>
+        </label>
+        <label class="field">
+          <span>Veranstalter</span>
+          <select id="f-org"><option value="">Alle Veranstalter</option></select>
+        </label>
+        <label class="field">
+          <span>Von</span>
+          <input type="date" id="f-von">
+        </label>
+        <label class="field">
+          <span>Bis</span>
+          <input type="date" id="f-bis">
+        </label>
+        <label class="field">
+          <span>Dauer</span>
+          <select id="f-dauer">
+            <option value="">Beliebig</option>
+            <option value="1-2">1–2 Tage</option>
+            <option value="3-3">3 Tage</option>
+            <option value="4-5">4–5 Tage</option>
+            <option value="6-10">6–10 Tage</option>
+            <option value="11-99">Mehr als 10 Tage</option>
+          </select>
+        </label>
+      </div>
+      <div class="filter-row filter-row--meta">
+        <label class="checkbox"><input type="checkbox" id="f-typ" checked> Wiederholbare Veranstaltungen einbeziehen (Typenanerkennung)</label>
+        <label class="checkbox"><input type="checkbox" id="f-bbox"> Nur sichtbaren Kartenausschnitt</label>
+        <span class="spacer"></span>
+        <button id="reset" class="reset-btn">Filter zurücksetzen</button>
+      </div>
     </div>
   </section>
 
   <main class="content">
     <div id="mindmap-view">
       <div id="mm-switch">
-        <button data-viz="pack" title="Zoombare Blasen">🫧 Bubbles</button>
-        <button data-viz="treemap" title="Flächen-Kacheln mit Drill-down">🟦 Treemap</button>
-        <button data-viz="sunburst" title="Radialer Drill-down">☀️ Sunburst</button>
-        <button data-viz="tree" title="Aufklappbarer Baum">🌳 Baum</button>
-        <button data-viz="tiles" title="Karten-Browser">🗂️ Kacheln</button>
+        <button data-viz="sunburst" title="Radialer Drill-down"><span class="viz-emoji">☀️</span><span class="viz-label">Sunburst</span></button>
+        <button data-viz="pack" title="Zoombare Blasen"><span class="viz-emoji">🫧</span><span class="viz-label">Bubbles</span></button>
+        <button data-viz="treemap" title="Flächen-Kacheln mit Drill-down"><span class="viz-emoji">🟦</span><span class="viz-label">Treemap</span></button>
+        <button data-viz="tree" title="Aufklappbarer Baum"><span class="viz-emoji">🌳</span><span class="viz-label">Baum</span></button>
+        <button data-viz="tiles" title="Karten-Browser"><span class="viz-emoji">🗂️</span><span class="viz-label">Kacheln</span></button>
       </div>
       <div id="mm-breadcrumb" hidden></div>
       <svg id="mindmap"></svg>

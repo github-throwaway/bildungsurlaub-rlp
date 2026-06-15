@@ -224,8 +224,7 @@ function renderPackViz() {
     .classed("selected", (d) => d.data.id === vizSelected)
     .on("click", (ev, d) => {
       ev.stopPropagation();
-      if (d.data.kind !== "group") vizSelect(d.data);
-      else hidePanel();
+      vizSelect(d.data); // jede Blase (auch Gruppe) öffnet die Veranstaltungsliste
       node.classed("selected", (n) => n.data.id === vizSelected);
       const target = d.children ? d : d.parent;
       if (target !== focus) zoom(target);
@@ -417,11 +416,12 @@ function renderSunburstViz() {
 
   function clicked(ev, p) {
     if (p.data.id) {
-      if (p.data.kind !== "group") {
-        vizSelect(p.data);
-        path.classed("selected", (n) => n.data.id === vizSelected);
-      }
+      // Jeder Ring (auch innerster = Gruppe) öffnet die Veranstaltungsliste
+      vizSelect(p.data);
+      path.classed("selected", (n) => n.data.id === vizSelected);
       if (!p.children) return; // Blatt: nur Panel, kein Zoom
+    } else {
+      hidePanel(); // Klick auf die Mitte schließt das Panel
     }
     parent = p.parent || root;
     center.datum(parent);
