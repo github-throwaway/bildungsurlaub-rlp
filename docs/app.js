@@ -304,8 +304,13 @@ function clearSel() {
 
 function setPlaceFilter(key) {
   placeFilter = key;
-  if (document.body.dataset.view === "mm") switchView("list");
+  if (document.body.dataset.view !== "map") switchView("map");
   applyFilters();
+  const coords = DATA.places[key];
+  if (coords) {
+    // nach evtl. View-Wechsel (invalidateSize) den Ort mittig zeigen
+    setTimeout(() => map.setView(coords, Math.max(map.getZoom() || 6, 11)), 70);
+  }
 }
 
 /* ---------- Merkliste (Favoriten) ---------- */
