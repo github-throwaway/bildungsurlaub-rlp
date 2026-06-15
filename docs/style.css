@@ -192,9 +192,16 @@ button.badge { font: inherit; cursor: pointer; }
 .empty { text-align: center; color: var(--muted); padding: 40px 10px; }
 
 /* ---------- Karte / Popups ---------- */
-/* Verhindert hauchdünne weiße Linien zwischen Kacheln auf HiDPI-/Retina-
-   Displays: 0,5 px Überlappung schließt die Subpixel-Lücken. */
-.leaflet-tile { width: 256.5px !important; height: 256.5px !important; }
+/* Hauchdünne Linien zwischen Kacheln auf HiDPI-Displays vermeiden:
+   Kacheln behalten ihre echte Größe (kein Skalieren/Antialiasing), jede
+   Kachel bekommt einen eigenen GPU-Layer für pixelgenaues Compositing,
+   und der Karten-Hintergrund ist neutral statt weiß. */
+.leaflet-container { background: #dfe1e5; }
+.leaflet-tile {
+  box-sizing: content-box;
+  will-change: transform;
+  backface-visibility: hidden;
+}
 .leaflet-popup-content { margin: 10px 14px; max-height: 260px; overflow-y: auto; }
 .popup-event { padding: 6px 0; border-bottom: 1px solid var(--border); }
 .popup-event:last-child { border-bottom: none; }
