@@ -83,6 +83,67 @@ function catDisplayName(name) {
   return name.replace(/^Fremdsprache\s+/, "");
 }
 
+// Kategorien, die statt nach Kurs-Buckets nach der im Titel genannten
+// Sprache aufgeschlüsselt werden (e.lang).
+const LANG_ONLY_CATS = new Set(["23"]);
+
+// Sprache aus dem Titel erkennen – deutsche, englische und (für
+// „Land: Sprache und Kultur") Ländervarianten werden zusammengelegt,
+// z. B. „Arabic" und „Arabisch". Bewusst NUR in LANG_ONLY_CATS genutzt,
+// damit \bchina\b o. Ä. keine politischen Veranstaltungen falsch taggt.
+const LANGUAGES = [
+  { id: "lang-plattdeutsch", name: "Plattdeutsch",   re: /plattdeutsch|\bplatt\b/i },
+  { id: "lang-englisch",     name: "Englisch",       re: /englisch|english/i },
+  { id: "lang-franzoesisch", name: "Französisch",    re: /französisch|french/i },
+  { id: "lang-italienisch",  name: "Italienisch",    re: /italienisch|italian/i },
+  { id: "lang-spanisch",     name: "Spanisch",       re: /spanisch|spanish|español/i },
+  { id: "lang-portugiesisch", name: "Portugiesisch", re: /portugiesisch|portuguese/i },
+  { id: "lang-schwedisch",   name: "Schwedisch",     re: /schwedisch|swedish/i },
+  { id: "lang-niederlaendisch", name: "Niederländisch", re: /niederländ|dutch|nederlands/i },
+  { id: "lang-daenisch",     name: "Dänisch",        re: /dänisch|danish/i },
+  { id: "lang-norwegisch",   name: "Norwegisch",     re: /norwegisch|norwegian/i },
+  { id: "lang-finnisch",     name: "Finnisch",       re: /finnisch|finnish/i },
+  { id: "lang-islaendisch",  name: "Isländisch",     re: /isländisch|icelandic/i },
+  { id: "lang-russisch",     name: "Russisch",       re: /russisch|russian/i },
+  { id: "lang-polnisch",     name: "Polnisch",       re: /polnisch|polish/i },
+  { id: "lang-tschechisch",  name: "Tschechisch",    re: /tschechisch|czech/i },
+  { id: "lang-ukrainisch",   name: "Ukrainisch",     re: /ukrainisch|ukrainian/i },
+  { id: "lang-kroatisch",    name: "Kroatisch",      re: /kroatisch|croatian/i },
+  { id: "lang-bulgarisch",   name: "Bulgarisch",     re: /bulgarisch|bulgarian/i },
+  { id: "lang-rumaenisch",   name: "Rumänisch",      re: /rumänisch|rumänien|romanian/i },
+  { id: "lang-ungarisch",    name: "Ungarisch",      re: /ungarisch|hungarian/i },
+  { id: "lang-griechisch",   name: "Griechisch",     re: /griechisch|greek/i },
+  { id: "lang-tuerkisch",    name: "Türkisch",       re: /türkisch|turkish/i },
+  { id: "lang-arabisch",     name: "Arabisch",       re: /arabisch|arabic/i },
+  { id: "lang-hebraeisch",   name: "Hebräisch",      re: /hebräisch|herbräisch|hebrew/i },
+  { id: "lang-persisch",     name: "Persisch",       re: /persisch|persian|farsi/i },
+  { id: "lang-chinesisch",   name: "Chinesisch",     re: /chinesisch|chinese|mandarin|\bchina\b/i },
+  { id: "lang-japanisch",    name: "Japanisch",      re: /japanisch|japanese|\bjapan\b/i },
+  { id: "lang-koreanisch",   name: "Koreanisch",     re: /koreanisch|korean|\bkorea\b/i },
+  { id: "lang-thai",         name: "Thai",           re: /thai|thailändisch/i },
+  { id: "lang-vietnamesisch", name: "Vietnamesisch", re: /vietnamesisch|vietnamese/i },
+  { id: "lang-indonesisch",  name: "Indonesisch",    re: /indonesisch|indonesian/i },
+  { id: "lang-tagalog",      name: "Tagalog",        re: /tagalog/i },
+  { id: "lang-afrikaans",    name: "Afrikaans",      re: /afrikaans/i },
+  { id: "lang-swahili",      name: "Swahili",        re: /swahili|suaheli/i },
+  { id: "lang-deutsch",      name: "Deutsch",        re: /\bdeutsch\b/i },
+  { id: "lang-gebaerden",    name: "Gebärdensprache", re: /gebärdensprache|sign language/i },
+];
+const LANG_BY_ID = Object.fromEntries(LANGUAGES.map((l) => [l.id, l]));
+
+function detectLanguage(title) {
+  const m = LANGUAGES.find((l) => l.re.test(title));
+  return m ? m.id : null;
+}
+
+// Anzeigename eines Bucket- ODER Sprach-Knotens
+function bucketName(id) {
+  return (LANG_BY_ID[id] || BUCKET_BY_ID[id])?.name || id;
+}
+function knownBucket(id) {
+  return !!(LANG_BY_ID[id] || BUCKET_BY_ID[id]);
+}
+
 /* Eigene Verfeinerungs-Ebene: Keyword-Buckets über den Titel */
 const REFINE_BUCKETS = [
   { id: "yoga",        name: "Yoga",                    re: /yoga/i },
@@ -121,23 +182,6 @@ const REFINE_BUCKETS = [
   { id: "stadtregion", name: "Stadt, Region & Heimat",  re: /stadtentwicklung|kommunalpolitik|ländlicher raum|\bheimat|quartier|stadtgesellschaft|dorfentwicklung/i },
   { id: "sprachreise", name: "Sprache & Kultur vor Ort", re: /sprache (und|&) kultur|landeskunde|kulturprogramm/i },
   { id: "intensivkurs", name: "Intensiv-Sprachkurse",    re: /intensiv|sprachkurs|\bustd\b|unterrichtsstunden|lessons|\bcourses?\b|general english|niveau|\b[ab][12]\b|\bc[12]\b/i },
-  // Sprachen aus dem Titel (v. a. für die Kategorie „Weitere Sprachen")
-  { id: "lang-schwedisch",    name: "Schwedisch",       re: /schwedisch/i },
-  { id: "lang-portugiesisch", name: "Portugiesisch",    re: /portugiesisch/i },
-  { id: "lang-arabisch",      name: "Arabisch",         re: /arabisch/i },
-  { id: "lang-niederlaendisch", name: "Niederländisch", re: /niederländ/i },
-  { id: "lang-japanisch",     name: "Japanisch",        re: /japanisch/i },
-  { id: "lang-polnisch",      name: "Polnisch",         re: /polnisch/i },
-  { id: "lang-koreanisch",    name: "Koreanisch",       re: /koreanisch/i },
-  { id: "lang-griechisch",    name: "Griechisch",       re: /griechisch/i },
-  { id: "lang-russisch",      name: "Russisch",         re: /russisch/i },
-  { id: "lang-norwegisch",    name: "Norwegisch",       re: /norwegisch/i },
-  { id: "lang-chinesisch",    name: "Chinesisch",       re: /chinesisch|mandarin/i },
-  { id: "lang-tuerkisch",     name: "Türkisch",         re: /türkisch/i },
-  { id: "lang-daenisch",      name: "Dänisch",          re: /dänisch/i },
-  { id: "lang-tschechisch",   name: "Tschechisch",      re: /tschechisch/i },
-  { id: "lang-gebaerden",     name: "Gebärdensprache",  re: /gebärdensprache/i },
-  { id: "lang-thai",          name: "Thai",             re: /\bthai\b/i },
   { id: "aufstieg",    name: "Fachwirt, Meister & Techniker", re: /fachwirt|betriebswirt\b|industriemeister|meistervorbereitung|meisterprüfung|handwerksmeister|fachmeister|techniker|fachkaufmann|bilanzbuchhalter|elektrofachkraft/i },
   { id: "studium",     name: "Berufsbegleitendes Studium", re: /semester|bachelor|\bmaster\b|\bmba\b|fernstudi|studiengang|präsenztage|hochschulzertifikat|\(fh\)/i },
   { id: "systemisch",  name: "Systemische Beratung",     re: /systemisch/i },

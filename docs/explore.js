@@ -32,20 +32,23 @@ function buildExploreTree() {
       if (!evs.length) continue;
       for (const e of evs) groupSet.add(e);
 
-      // „Weitere Sprachen" (cat 23) nur nach Sprache aufschlüsseln,
-      // nicht nach generischen Kurs-Buckets (Intensivkurse etc.)
-      const langOnly = cid === "23";
+      // „Weitere Sprachen" (cat 23) nach der im Titel erkannten Sprache
+      // aufschlüsseln (e.lang) – jede Sprache als eigener Knoten (Schwelle 1),
+      // damit kein „Sonstige"-Sammelknoten nötig ist. Sonst: Kurs-Buckets.
+      const langOnly = LANG_ONLY_CATS.has(cid);
       const perBucket = {};
-      for (const e of evs) for (const b of e.buckets) {
-        if (langOnly && !b.startsWith("lang-")) continue;
-        (perBucket[b] ??= []).push(e);
+      if (langOnly) {
+        for (const e of evs) if (e.lang) (perBucket[e.lang] ??= []).push(e);
+      } else {
+        for (const e of evs) for (const b of e.buckets) (perBucket[b] ??= []).push(e);
       }
+      const minCount = langOnly ? 1 : 3;
       const bucketNodes = Object.entries(perBucket)
-        .filter(([, bevs]) => bevs.length >= 3)
+        .filter(([, bevs]) => bevs.length >= minCount)
         .sort((a, b) => b[1].length - a[1].length)
         .map(([bid, bevs]) => ({
           id: `b:${cid}:${bid}`, kind: "bucket", bid, cid, gid,
-          name: BUCKET_BY_ID[bid].name, events: bevs,
+          name: bucketName(bid), events: bevs,
         }));
       let children = null;
       if (bucketNodes.length) {
@@ -358,7 +361,9 @@ function renderSunburstViz() {
 
   const arc = d3.arc()
     .startAngle((d) => d.x0).endAngle((d) => d.x1)
-    .padAngle((d) => Math.min((d.x1 - d.x0) / 2, 0.004))
+    // Abstand nur ein kleiner Teil der Slice-Breite, damit sehr schmale
+    // Segmente nicht zu Null-Breite kollabieren und anklickbar bleiben
+    .padAngle((d) => Math.min((d.x1 - d.x0) * 0.1, 0.003))
     .padRadius(radius * 1.5)
     .innerRadius((d) => d.y0 * radius)
     .outerRadius((d) => Math.max(d.y0 * radius, d.y1 * radius - 1.5));
@@ -373,7 +378,13 @@ function renderSunburstViz() {
     .attr("pointer-events", (d) => (arcVisible(d.current) ? "auto" : "none"))
     .attr("d", (d) => arc(d.current))
     .classed("selected", (d) => d.data.id === vizSelected)
-    .on("click", clicked);
+    .on("click", clicked)
+    // Hover zeigt den Namen in der Mitte – so sind auch sehr schmale
+    // Segmente ohne eigenes Label lesbar.
+    .on("mouseover", (ev, d) => {
+      if (arcVisible(d.current)) setCenterLabel(`${vizLabel(d.data)} · ${d.data.events.length}`);
+    })
+    .on("mouseout", () => setCenterLabel(centerText));
   path.append("title").text((d) => `${vizLabel(d.data)} (${d.data.events.length})`);
 
   // Labels: radial ausgerichtet, bei Bedarf auf bis zu 3 Zeilen umgebrochen,
@@ -397,6 +408,7 @@ function renderSunburstViz() {
     .attr("transform", (d) => labelTransform(d.current));
 
   let parent = root;
+  let centerText = "Alle Themen"; // dauerhafter Mitte-Text (Fokus), Hover überschreibt temporär
   const center = g.append("circle")
     .datum(root)
     .attr("r", radius)
@@ -407,7 +419,7 @@ function renderSunburstViz() {
   const centerLabel = g.append("text")
     .attr("class", "sb-center")
     .attr("text-anchor", "middle");
-  setCenterLabel("Alle Themen");
+  setCenterLabel(centerText);
 
   function setCenterLabel(text) {
     centerLabel.selectAll("tspan").remove();
@@ -431,7 +443,8 @@ function renderSunburstViz() {
     }
     parent = p.parent || root;
     center.datum(parent);
-    setCenterLabel(p.data.id ? vizLabel(p.data) : "Alle Themen");
+    centerText = p.data.id ? vizLabel(p.data) : "Alle Themen";
+    setCenterLabel(centerText);
 
     root.each((d) => (d.target = {
       x0: Math.max(0, Math.min(1, (d.x0 - p.x0) / (p.x1 - p.x0))) * 2 * Math.PI,
