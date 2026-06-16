@@ -46,6 +46,43 @@ for (const [gid, g] of Object.entries(CAT_GROUPS)) {
   for (const cid of g.cats) GROUP_OF_CAT[cid] = gid;
 }
 
+/* Quell-Ländername -> ISO-3166-1-alpha-2 (für Flaggen-Emojis). */
+const LAND_CC = {
+  "Deutschland": "de", "Spanien": "es", "Italien": "it", "Frankreich": "fr",
+  "U.K.": "gb", "Polen": "pl", "Österreich": "at", "Ireland": "ie",
+  "Malta": "mt", "Niederlande": "nl", "Portugal": "pt", "U.S.A.": "us",
+  "South Africa": "za", "Griechenland": "gr", "Canada": "ca", "Schweden": "se",
+  "Costa Rica": "cr", "Schweiz": "ch", "Mexico": "mx", "Norwegen": "no",
+  "Kolumbien": "co", "Tschech.Republik": "cz", "Japan": "jp", "Belgien": "be",
+  "Thailand": "th", "Jordanien": "jo", "Australien": "au", "Marokko": "ma",
+  "VR China": "cn", "Sri Lanka": "lk", "Albanien": "al", "Dänemark": "dk",
+  "Türkei": "tr", "Panama": "pa", "Peru": "pe", "Kroatien": "hr",
+  "Ecuador": "ec", "Indonesien": "id", "Litauen": "lt", "Guatemala": "gt",
+  "Brasilien": "br", "Ukraine": "ua", "Estland": "ee", "Vietnam": "vn",
+  "Ägypten": "eg", "Indien": "in", "Guadeloupe": "gp", "Zypern": "cy",
+  "Georgien": "ge", "Cuba": "cu", "Argentinien": "ar", "Tanzania": "tz",
+  "Lettland": "lv", "Russland": "ru", "Südkorea": "kr", "Oman": "om",
+  "Island": "is", "Ungarn": "hu", "Bulgarien": "bg", "Luxembourg": "lu",
+  "New Zealand": "nz", "Verein.Arab.Emirate": "ae", "Bhutan": "bt",
+  "Rumänien": "ro", "Chile": "cl", "Uruguay": "uy", "Dominikan.Republik": "do",
+  "Barbados": "bb", "Namibia": "na", "Uganda": "ug", "Armenien": "am",
+  "Aserbaidschan": "az", "Libanon": "lb", "Bosnien-Herzegowina": "ba",
+  "Cabo Verde": "cv", "Kenia": "ke", "Singapore": "sg", "Nicaragua": "ni",
+  "Nepal": "np", "Ruanda": "rw", "El Salvador": "sv",
+};
+
+// Flaggen-Emoji aus dem ISO-Code (zwei Regional-Indicator-Symbole)
+function flagEmoji(cc) {
+  if (!cc) return "🌍";
+  return String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
+}
+
+// Anzeigenamen für Kategorien aufräumen: redundantes „Fremdsprache" weg
+function catDisplayName(name) {
+  if (name === "Sonstige Fremdsprachen") return "Weitere Sprachen";
+  return name.replace(/^Fremdsprache\s+/, "");
+}
+
 /* Eigene Verfeinerungs-Ebene: Keyword-Buckets über den Titel */
 const REFINE_BUCKETS = [
   { id: "yoga",        name: "Yoga",                    re: /yoga/i },
@@ -84,6 +121,23 @@ const REFINE_BUCKETS = [
   { id: "stadtregion", name: "Stadt, Region & Heimat",  re: /stadtentwicklung|kommunalpolitik|ländlicher raum|\bheimat|quartier|stadtgesellschaft|dorfentwicklung/i },
   { id: "sprachreise", name: "Sprache & Kultur vor Ort", re: /sprache (und|&) kultur|landeskunde|kulturprogramm/i },
   { id: "intensivkurs", name: "Intensiv-Sprachkurse",    re: /intensiv|sprachkurs|\bustd\b|unterrichtsstunden|lessons|\bcourses?\b|general english|niveau|\b[ab][12]\b|\bc[12]\b/i },
+  // Sprachen aus dem Titel (v. a. für die Kategorie „Weitere Sprachen")
+  { id: "lang-schwedisch",    name: "Schwedisch",       re: /schwedisch/i },
+  { id: "lang-portugiesisch", name: "Portugiesisch",    re: /portugiesisch/i },
+  { id: "lang-arabisch",      name: "Arabisch",         re: /arabisch/i },
+  { id: "lang-niederlaendisch", name: "Niederländisch", re: /niederländ/i },
+  { id: "lang-japanisch",     name: "Japanisch",        re: /japanisch/i },
+  { id: "lang-polnisch",      name: "Polnisch",         re: /polnisch/i },
+  { id: "lang-koreanisch",    name: "Koreanisch",       re: /koreanisch/i },
+  { id: "lang-griechisch",    name: "Griechisch",       re: /griechisch/i },
+  { id: "lang-russisch",      name: "Russisch",         re: /russisch/i },
+  { id: "lang-norwegisch",    name: "Norwegisch",       re: /norwegisch/i },
+  { id: "lang-chinesisch",    name: "Chinesisch",       re: /chinesisch|mandarin/i },
+  { id: "lang-tuerkisch",     name: "Türkisch",         re: /türkisch/i },
+  { id: "lang-daenisch",      name: "Dänisch",          re: /dänisch/i },
+  { id: "lang-tschechisch",   name: "Tschechisch",      re: /tschechisch/i },
+  { id: "lang-gebaerden",     name: "Gebärdensprache",  re: /gebärdensprache/i },
+  { id: "lang-thai",          name: "Thai",             re: /\bthai\b/i },
   { id: "aufstieg",    name: "Fachwirt, Meister & Techniker", re: /fachwirt|betriebswirt\b|industriemeister|meistervorbereitung|meisterprüfung|handwerksmeister|fachmeister|techniker|fachkaufmann|bilanzbuchhalter|elektrofachkraft/i },
   { id: "studium",     name: "Berufsbegleitendes Studium", re: /semester|bachelor|\bmaster\b|\bmba\b|fernstudi|studiengang|präsenztage|hochschulzertifikat|\(fh\)/i },
   { id: "systemisch",  name: "Systemische Beratung",     re: /systemisch/i },

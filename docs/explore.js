@@ -52,7 +52,7 @@ function buildExploreTree() {
       }
       catNodes.push({
         id: `c:${cid}`, kind: "cat", cid, gid,
-        name: DATA.categories[cid].name, events: evs, children,
+        name: catDisplayName(DATA.categories[cid].name), events: evs, children,
       });
     }
     if (!catNodes.length) continue;

@@ -105,6 +105,16 @@
         <div id="mm-panel-list" class="list"></div>
       </aside>
     </div>
+    <div id="swipe-view">
+      <div id="swipe-progress"></div>
+      <div id="swipe-deck"></div>
+      <div id="swipe-empty" hidden></div>
+      <div id="swipe-actions">
+        <button id="sw-skip" class="sw-btn sw-btn--skip" title="Weiter (nach links wischen)">✕</button>
+        <button id="sw-info" class="sw-btn sw-btn--info" title="Auf der Karte zeigen">🗺️</button>
+        <button id="sw-like" class="sw-btn sw-btn--like" title="Merken (nach rechts wischen)">★</button>
+      </div>
+    </div>
     <div id="map"></div>
     <aside class="results">
       <div class="results-head">
@@ -125,6 +135,7 @@
 
   <nav class="view-tabs">
     <button id="tab-mm" class="active">🧠 Entdecken</button>
+    <button id="tab-swipe">🎲 Zufall</button>
     <button id="tab-map"><span class="lbl-desktop">🗺️ Karte &amp; Liste</span><span class="lbl-mobile">🗺️ Karte</span></button>
     <button id="tab-list">📋 Liste</button>
   </nav>
@@ -134,6 +145,7 @@
   <script src="https://unpkg.com/d3@7.9.0/dist/d3.min.js"></script>
   <script src="taxonomy.js"></script>
   <script src="explore.js"></script>
+  <script src="swipe.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
