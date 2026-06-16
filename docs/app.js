@@ -40,6 +40,7 @@ async function init() {
   for (const e of DATA.events) {
     e.cats = e.cats || [];
     e.buckets = bucketize(e);
+    e.lang = detectLanguage(e.title); // für nach Sprache aufgeschlüsselte Kategorien
   }
   computeCatBuckets();
 
@@ -136,6 +137,7 @@ function computeCatBuckets() {
   const counts = {};
   for (const e of DATA.events) {
     for (const c of e.cats) {
+      if (LANG_ONLY_CATS.has(c)) continue; // diese nutzen e.lang, nicht Kurs-Buckets
       const m = (counts[c] ??= {});
       for (const b of e.buckets) m[b] = (m[b] || 0) + 1;
     }
@@ -187,8 +189,8 @@ function restoreFromURL() {
   if (grp && CAT_GROUPS[grp]) {
     sel = { type: "group", gid: grp, label: `${CAT_GROUPS[grp].icon} ${CAT_GROUPS[grp].name}` };
   } else if (cat && DATA.categories[cat]) {
-    if (bucket && BUCKET_BY_ID[bucket]) {
-      sel = { type: "bucket", cid: cat, bid: bucket, label: BUCKET_BY_ID[bucket].name };
+    if (bucket && knownBucket(bucket)) {
+      sel = { type: "bucket", cid: cat, bid: bucket, label: bucketName(bucket) };
     } else if (p.get("rest")) {
       sel = { type: "rest", cid: cat, label: `${catDisplayName(DATA.categories[cat].name)} · Sonstige` };
     } else {
@@ -260,12 +262,17 @@ function matchesBase(e, s, bounds) {
 // Themen-Auswahl (Gruppe / Kategorie / Unterthema / „Sonstige")
 function selMatch(e) {
   if (!sel) return true;
+  const langCat = sel.cid && LANG_ONLY_CATS.has(sel.cid);
   switch (sel.type) {
     case "group":  return e.cats.some((c) => GROUP_OF_CAT[c] === sel.gid);
     case "cat":    return e.cats.includes(sel.cid);
-    case "bucket": return e.cats.includes(sel.cid) && e.buckets.includes(sel.bid);
-    case "rest":   return e.cats.includes(sel.cid) &&
-                          !e.buckets.some((b) => CAT_SHOWN_BUCKETS[sel.cid]?.has(b));
+    case "bucket":
+      if (langCat) return e.cats.includes(sel.cid) && e.lang === sel.bid;
+      return e.cats.includes(sel.cid) && e.buckets.includes(sel.bid);
+    case "rest":
+      if (langCat) return e.cats.includes(sel.cid) && !e.lang;
+      return e.cats.includes(sel.cid) &&
+             !e.buckets.some((b) => CAT_SHOWN_BUCKETS[sel.cid]?.has(b));
   }
   return true;
 }
