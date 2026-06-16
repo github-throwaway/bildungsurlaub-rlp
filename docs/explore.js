@@ -32,8 +32,14 @@ function buildExploreTree() {
       if (!evs.length) continue;
       for (const e of evs) groupSet.add(e);
 
+      // „Weitere Sprachen" (cat 23) nur nach Sprache aufschlüsseln,
+      // nicht nach generischen Kurs-Buckets (Intensivkurse etc.)
+      const langOnly = cid === "23";
       const perBucket = {};
-      for (const e of evs) for (const b of e.buckets) (perBucket[b] ??= []).push(e);
+      for (const e of evs) for (const b of e.buckets) {
+        if (langOnly && !b.startsWith("lang-")) continue;
+        (perBucket[b] ??= []).push(e);
+      }
       const bucketNodes = Object.entries(perBucket)
         .filter(([, bevs]) => bevs.length >= 3)
         .sort((a, b) => b[1].length - a[1].length)

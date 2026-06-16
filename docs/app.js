@@ -485,7 +485,18 @@ function applyPanelSelection(view) {
 
 function bindEvents() {
   let t;
-  $("#f-text").addEventListener("input", () => { clearTimeout(t); t = setTimeout(applyFilters, 250); });
+  const toggleClear = () => { $("#search-clear").hidden = !$("#f-text").value; };
+  $("#f-text").addEventListener("input", () => {
+    toggleClear();
+    clearTimeout(t); t = setTimeout(applyFilters, 250);
+  });
+  $("#search-clear").addEventListener("click", () => {
+    $("#f-text").value = "";
+    toggleClear();
+    $("#f-text").focus();
+    applyFilters();
+  });
+  toggleClear();
 
   for (const chip of document.querySelectorAll("#f-region .chip")) {
     chip.addEventListener("click", () => {
@@ -542,6 +553,7 @@ function bindEvents() {
 
   $("#reset").addEventListener("click", () => {
     $("#f-text").value = "";
+    toggleClear();
     $("#f-land").value = "";
     $("#f-cat").value = "";
     $("#f-org").value = "";
