@@ -172,10 +172,7 @@
   52.88083,
   11.49224
  ],
- "Arezzo|Ecuador": [
-  43.51714,
-  11.76393
- ],
+ "Arezzo|Ecuador": null,
  "Arezzo|Italien": [
   43.51714,
   11.76393
@@ -466,13 +463,10 @@
   10.47375
  ],
  "Bath|U.K.": [
-  29.9586,
-  31.25966
+  51.38139,
+  -2.3597
  ],
- "Batrum|Deutschland": [
-  -3.05705,
-  -59.93958
- ],
+ "Batrum|Deutschland": null,
  "Bautzen|Deutschland": [
   51.18091,
   14.4276
@@ -501,10 +495,7 @@
   49.84909,
   6.80165
  ],
- "Belfast|Ireland": [
-  54.59639,
-  -5.93018
- ],
+ "Belfast|Ireland": null,
  "Benediktbeuern|Deutschland": [
   47.70605,
   11.41008
@@ -685,8 +676,8 @@
  ],
  "Bottrum|Deutschland": null,
  "Bournemouth|U.K.": [
-  37.27269,
-  -121.87475
+  50.74467,
+  -1.85795
  ],
  "Bovenden|Deutschland": [
   51.58694,
@@ -743,8 +734,8 @@
   7.89836
  ],
  "Brighton|U.K.": [
-  38.54935,
-  -121.41718
+  50.82146,
+  -0.14006
  ],
  "Brisbane|Australien": [
   -27.46896,
@@ -767,12 +758,12 @@
   4.35249
  ],
  "Brüssel|Deutschland": [
-  50.84385,
-  4.37355
+  50.61081,
+  6.59325
  ],
  "Budapest|Ungarn": [
-  47.48139,
-  19.14577
+  47.49788,
+  19.04024
  ],
  "Buenos Aires|Argentinien": [
   -34.60956,
@@ -824,16 +815,16 @@
   145.77219
  ],
  "Cala Figuera, Mallorca|Spanien": [
-  39.59585,
-  2.68577
+  39.33132,
+  3.16992
  ],
  "Calle Velarde|Spanien": [
   37.66292,
   -5.71595
  ],
  "Cambridge|U.K.": [
-  34.09936,
-  -118.15798
+  52.19758,
+  0.13915
  ],
  "Camini|Italien": [
   38.43226,
@@ -856,8 +847,8 @@
   8.52783
  ],
  "Cardiff|U.K.": [
-  33.68852,
-  -117.80705
+  51.48165,
+  -3.17919
  ],
  "Carlsberg|Deutschland": [
   49.50402,
@@ -912,8 +903,8 @@
   14.02446
  ],
  "Central Namibia|Namibia": [
-  -22.58083,
-  17.08408
+  -22.67937,
+  14.52874
  ],
  "Chania|": [
   35.51208,
@@ -932,8 +923,8 @@
   13.30968
  ],
  "Cheltenham|U.K.": [
-  34.14109,
-  -118.42304
+  51.89957,
+  -2.07116
  ],
  "Chemnitz|Deutschland": [
   50.83235,
@@ -968,20 +959,20 @@
   -8.47264
  ],
  "Cornwall|U.K.": [
-  38.02048,
-  -121.87885
+  50.44335,
+  -4.62466
  ],
  "Corralejo|Spanien": [
   28.74006,
   -13.86932
  ],
  "Corralejo, Fuerteventura|Spanien": [
-  28.71511,
-  -13.90069
+  28.72922,
+  -13.87252
  ],
  "Costa Rica|Costa Rica": [
-  -18.34819,
-  -53.30701
+  10.27356,
+  -84.07391
  ],
  "Costa Rica|Spanien": [
   39.4543,
@@ -1024,8 +1015,8 @@
   11.2247
  ],
  "Danzig|Polen": [
-  54.4288,
-  18.79833
+  54.34829,
+  18.65402
  ],
  "Dar Es salaam|Tanzania": [
   -6.81608,
@@ -1036,8 +1027,8 @@
   39.28036
  ],
  "Darlington|U.K.": [
-  38.72907,
-  -120.40159
+  54.52421,
+  -1.55558
  ],
  "Darmstadt|Deutschland": [
   49.87277,
@@ -1072,13 +1063,10 @@
   51.93628,
   8.87915
  ],
- "Deutschnofen|Deutschland": [
-  46.40213,
-  11.44208
- ],
+ "Deutschnofen|Deutschland": null,
  "Devon|U.K.": [
-  34.84192,
-  -120.51933
+  50.72414,
+  -3.66078
  ],
  "Dharamsala|Indien": [
   32.2143,
@@ -1179,13 +1167,10 @@
   7.15209
  ],
  "Edinburgh|U.K.": [
-  34.06913,
-  -118.36429
+  55.95335,
+  -3.18837
  ],
- "Edingburgh|U.K.": [
-  34.53421,
-  -92.4113
- ],
+ "Edingburgh|U.K.": null,
  "Eibenstock|Deutschland": [
   50.47265,
   12.61151
@@ -1534,8 +1519,8 @@
   10.03963
  ],
  "Glenprosen|U.K.": [
-  37.32395,
-  -121.77136
+  56.79808,
+  -3.16308
  ],
  "Global MBA|Spanien": null,
  "Goldrain|Italien": [
@@ -1715,10 +1700,7 @@
  ],
  "Hameln, Hannover, Online|Deutschland": null,
  "Hameln/ Online|Deutschland": null,
- "Hamlen|Deutschland": [
-  56.45504,
-  9.45115
- ],
+ "Hamlen|Deutschland": null,
  "Hamm|Deutschland": [
   51.68128,
   7.81912
@@ -1899,10 +1881,7 @@
   10.8187,
   106.65183
  ],
- "Ho Chin Minh City|Vietnam": [
-  24.67072,
-  102.58985
- ],
+ "Ho Chin Minh City|Vietnam": null,
  "Hof|Deutschland": [
   50.31875,
   11.9163
@@ -1932,8 +1911,8 @@
   5.63777
  ],
  "Hollum-Ameland|Niederlande": [
-  53.44122,
-  5.63777
+  53.44833,
+  5.73996
  ],
  "Holzkirchen|Deutschland": [
   49.7817,
@@ -1944,8 +1923,8 @@
   7.30424
  ],
  "Honolulu|U.S.A.": [
-  -34.86324,
-  138.49661
+  21.30455,
+  -157.85568
  ],
  "Honululu, Hawaii|U.S.A.": null,
  "Horn - Bad Meinberg|Deutschland": [
@@ -2078,8 +2057,8 @@
   24.92222
  ],
  "Jersey|U.K.": [
-  34.26841,
-  -118.46902
+  51.62964,
+  -3.86298
  ],
  "Juist|Deutschland": [
   53.67845,
@@ -2134,8 +2113,8 @@
   33.1263
  ],
  "Kanada|U.S.A.": [
-  49.1944,
-  -123.1785
+  39.41687,
+  -101.2921
  ],
  "Kanuas|Litauen": null,
  "Kappeln|Deutschland": [
@@ -2160,8 +2139,8 @@
   8.46232
  ],
  "Karsiyaka/Izmir|Türkei": [
-  38.48096,
-  27.07146
+  38.50345,
+  27.11346
  ],
  "Karwendel|Deutschland": [
   47.43002,
@@ -2264,32 +2243,29 @@
   15.57655
  ],
  "Kolobrzeg|Polen": [
-  54.17596,
-  15.57642
+  54.17607,
+  15.57655
  ],
  "Kopenhagen|Dänemark": [
   55.68672,
   12.57007
  ],
- "Koppenhagen|Dänemark": [
-  51.12949,
-  9.5544
- ],
+ "Koppenhagen|Dänemark": null,
  "Kottegoda|Sri Lanka": [
   6.94574,
   81.08973
  ],
  "Kołobrzeg|Polen": [
-  54.17607,
-  15.57655
+  54.17596,
+  15.57642
  ],
  "Krakau|Polen": [
-  50.06195,
-  19.93686
- ],
- "Krakow|Polen": [
   50.04694,
   19.99715
+ ],
+ "Krakow|Polen": [
+  50.06195,
+  19.93686
  ],
  "Krakow am See|Deutschland": [
   53.64996,
@@ -2319,10 +2295,7 @@
   25.03994,
   102.71691
  ],
- "Kökn|Deutschland": [
-  39.11339,
-  43.01691
- ],
+ "Kökn|Deutschland": null,
  "Köln|": [
   50.93836,
   6.95997
@@ -2432,10 +2405,7 @@
   43.19244,
   -9.01689
  ],
- "Le Gosier|Guadeloupe": [
-  16.20721,
-  -61.49313
- ],
+ "Le Gosier|Guadeloupe": null,
  "Le Havre|Frankreich": [
   49.4939,
   0.10797
@@ -2555,16 +2525,16 @@
  ],
  "Live-online|Deutschland": null,
  "Liverpool|U.K.": [
-  53.47179,
-  -2.86081
+  53.39334,
+  -2.91664
  ],
  "Lodge|Namibia": [
   -17.23929,
   12.2448
  ],
  "Lodz|Polen": [
-  51.76873,
-  19.45699
+  51.77282,
+  19.47849
  ],
  "Logrono (La Rioja)|Spanien": [
   42.46612,
@@ -2583,12 +2553,12 @@
   9.55669
  ],
  "London|U.K.": [
-  -8.81628,
-  115.15412
+  51.50745,
+  -0.12777
  ],
  "Londonderry|U.K.": [
-  34.09481,
-  -118.37984
+  54.99787,
+  -7.32131
  ],
  "Lorch|Deutschland": [
   48.79824,
@@ -2599,8 +2569,8 @@
   15.85614
  ],
  "Lublin|Polen": [
-  51.25056,
-  22.5701
+  51.21819,
+  22.55468
  ],
  "Lubmin|Deutschland": [
   54.1322,
@@ -2631,8 +2601,8 @@
   12.64676
  ],
  "Luxemburg|Luxembourg": [
-  49.61128,
-  6.1298
+  49.81587,
+  6.12968
  ],
  "Lychen|Deutschland": [
   53.20833,
@@ -2759,8 +2729,8 @@
   10.54655
  ],
  "Malta|Malta": [
-  35.90221,
-  14.41374
+  35.93114,
+  14.39516
  ],
  "Manacor|Spanien": [
   39.56965,
@@ -2771,8 +2741,8 @@
   -86.27372
  ],
  "Manchester|U.K.": [
-  38.97019,
-  -123.68807
+  53.44246,
+  -2.23245
  ],
  "Mannheim|Deutschland": [
   49.48929,
@@ -2850,10 +2820,7 @@
   46.67135,
   11.16463
  ],
- "Meran|Schweiz": [
-  46.67135,
-  11.16463
- ],
+ "Meran|Schweiz": null,
  "Mescherin|Deutschland": [
   53.28074,
   14.40505
@@ -2867,8 +2834,8 @@
   -99.15147
  ],
  "Mexico-Stadt|Mexico": [
-  19.43263,
-  -99.13318
+  19.32077,
+  -99.15147
  ],
  "Mexiko-Stadt|Mexico": [
   19.32077,
@@ -2939,8 +2906,8 @@
   -73.56981
  ],
  "Montreal|U.S.A.": [
-  45.49936,
-  -73.57314
+  37.96847,
+  -92.59134
  ],
  "Montreux|Schweiz": [
   46.43108,
@@ -3129,20 +3096,20 @@
   7.4663
  ],
  "New York|U.S.A.": [
-  40.87811,
-  -73.90352
+  40.71273,
+  -74.00602
  ],
  "New York City|U.S.A.": [
-  40.77156,
-  -73.95657
+  40.71273,
+  -74.00602
  ],
  "Newlands|South Africa": [
-  -33.97422,
-  18.46761
+  -33.97428,
+  18.4573
  ],
  "Newquay|U.K.": [
-  35.32921,
-  -119.11937
+  50.41364,
+  -5.08435
  ],
  "Nice|Frankreich": [
   43.70094,
@@ -3363,8 +3330,8 @@
   8.78699
  ],
  "Oxford|U.K.": [
-  34.73489,
-  -82.28374
+  51.75201,
+  -1.25785
  ],
  "Oßmannstedt|Deutschland": [
   51.01742,
@@ -3403,16 +3370,16 @@
   -1.65224
  ],
  "Panama|Panama": [
-  8.97145,
-  -79.53418
+  8.55956,
+  -81.13084
  ],
  "Parin|Deutschland": [
   53.91331,
   11.18929
  ],
  "Paris|Frankreich": [
-  48.85889,
-  2.32004
+  48.8535,
+  2.34839
  ],
  "Paro|Bhutan": [
   27.46464,
@@ -3427,12 +3394,12 @@
   116.3913
  ],
  "Penryn|U.K.": [
-  38.85212,
-  -121.16939
+  50.16847,
+  -5.1045
  ],
  "Pensacola|U.S.A.": [
-  -33.93978,
-  150.91313
+  30.42131,
+  -87.21691
  ],
  "Perl|Deutschland": [
   49.50201,
@@ -3493,12 +3460,12 @@
  ],
  "Poilly-Iez-Gien|Frankreich": null,
  "Poland|Polen": [
-  52.21386,
-  21.00373
+  52.21593,
+  19.13442
  ],
  "Polen|Polen": [
-  52.21386,
-  21.00373
+  52.21593,
+  19.13442
  ],
  "Polis Chrysochos|Zypern": null,
  "Porches|Portugal": [
@@ -3517,10 +3484,7 @@
   42.77688,
   10.38987
  ],
- "Porto Christi|Spanien": [
-  41.13631,
-  -8.61766
- ],
+ "Porto Christi|Spanien": null,
  "Porto Christo|Spanien": null,
  "Porto Santo|Portugal": [
   33.06578,
@@ -3535,16 +3499,16 @@
   10.29926
  ],
  "Portsmouth|U.K.": [
-  33.60094,
-  -117.64202
+  50.80003,
+  -1.0906
  ],
  "Poschiavo|Schweiz": [
   46.32641,
   10.05814
  ],
  "Posen|Polen": [
-  52.40066,
-  16.91973
+  52.40827,
+  16.93352
  ],
  "Postmünster|Deutschland": [
   48.41843,
@@ -3575,8 +3539,8 @@
   6.4249
  ],
  "Puerta de la Cruz|Spanien": [
-  38.92367,
-  -6.3492
+  39.95566,
+  -4.84182
  ],
  "Puerto Escondido|Mexico": [
   15.86933,
@@ -3818,10 +3782,7 @@
   49.4318,
   2.01
  ],
- "Sainte Anne|Guadeloupe": [
-  16.22568,
-  -61.38591
- ],
+ "Sainte Anne|Guadeloupe": null,
  "Salerno|Italien": [
   40.41944,
   15.31061
@@ -3848,8 +3809,8 @@
  ],
  "San Andrés Choluls|Mexico": null,
  "San Francisco|U.S.A.": [
-  37.79465,
-  -122.40705
+  37.78794,
+  -122.40752
  ],
  "San Gijan|Malta": null,
  "San Giljan|Malta": [
@@ -3901,12 +3862,12 @@
   -16.25078
  ],
  "Santa Domingo|Cuba": [
-  18.47952,
-  -69.89402
+  21.37152,
+  -77.91009
  ],
  "Santa Elena, Manglaralto|Ecuador": [
-  -1.93962,
-  -80.72411
+  -1.8504,
+  -80.74635
  ],
  "Santa Flavia|Italien": [
   38.08133,
@@ -4080,21 +4041,18 @@
   31.23127,
   121.47002
  ],
- "Shrewbury|U.K.": [
-  13.13598,
-  -59.43541
- ],
+ "Shrewbury|U.K.": null,
  "Shrewsbury|U.K.": [
-  34.20113,
-  -118.65372
+  52.70775,
+  -2.75407
  ],
  "Sibiu|Rumänien": [
   45.79739,
   24.15192
  ],
  "Sidmouth|U.K.": [
-  33.74906,
-  -117.01641
+  50.679,
+  -3.23766
  ],
  "Siedelsbrunn|Deutschland": [
   49.55006,
@@ -4113,8 +4071,8 @@
   10.76945
  ],
  "Singapur|Singapore": [
-  1.28992,
-  103.85191
+  1.35711,
+  103.8195
  ],
  "Siracusa|Italien": [
   37.03158,
@@ -4188,8 +4146,8 @@
   7.24859
  ],
  "Sri Lanka|Sri Lanka": [
-  7.87718,
-  80.66255
+  7.55549,
+  80.71378
  ],
  "St Julian's|Malta": [
   35.91992,
@@ -4247,10 +4205,7 @@
   35.94807,
   14.39739
  ],
- "St. Pauls Bay|Malta": [
-  49.86897,
-  -57.81768
- ],
+ "St. Pauls Bay|Malta": null,
  "St. Paul´s Bay|Malta": [
   35.94807,
   14.39739
@@ -4404,8 +4359,8 @@
   8.31304
  ],
  "Szczecin|Polen": [
-  53.42981,
-  14.59287
+  53.43018,
+  14.55096
  ],
  "TA Hameln u/o TA Hannover u/o Online|Deutschland": null,
  "Tallinn|Estland": [
@@ -4513,8 +4468,8 @@
   -79.38393
  ],
  "Toronto|U.S.A.": [
-  -33.01344,
-  151.5942
+  41.90486,
+  -90.86403
  ],
  "Torun|Polen": [
   53.01454,
@@ -4528,10 +4483,7 @@
   50.43228,
   -3.68715
  ],
- "Totnes|Deutschland": [
-  50.43228,
-  -3.68715
- ],
+ "Totnes|Deutschland": null,
  "Totnes|U.K.": [
   50.43228,
   -3.68715
@@ -4667,10 +4619,7 @@
   9.88891
  ],
  "Veitshöchtheim|Deutschland": null,
- "Velden am Wörthersee|Deutschland": [
-  46.61519,
-  14.04506
- ],
+ "Velden am Wörthersee|Deutschland": null,
  "Venedig|Italien": [
   45.40462,
   12.31052
@@ -4756,8 +4705,8 @@
   12.08129
  ],
  "Warschau|Polen": [
-  52.23196,
-  21.00672
+  52.23337,
+  21.07115
  ],
  "Wattwiller|Frankreich": [
   47.83718,
@@ -4885,10 +4834,7 @@
   49.29426,
   8.69871
  ],
- "Wilhelmshafen|Deutschland": [
-  51.10003,
-  17.11886
- ],
+ "Wilhelmshafen|Deutschland": null,
  "Winden|Deutschland": [
   50.33812,
   7.83086
@@ -5077,8 +5023,8 @@
   -79.53418
  ],
  "Ruanda|Ruanda": [
-  -10.54098,
-  34.91919
+  -2.00021,
+  30.0004
  ],
  "Saalbach|Österreich": [
   47.39146,
