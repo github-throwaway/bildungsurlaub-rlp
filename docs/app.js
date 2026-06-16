@@ -19,17 +19,8 @@ const eventId = (e) => `${e.kz}|${e.start}|${e.ort}`;
 const awvLink = (kz) =>
   `https://awv.rlp.de/suche/?id_stichwort=&date=&organizer=&topic=&land_id=&ort=&veranstaltungsdauer=&akz=${encodeURIComponent(kz)}&submit=1`;
 
-const FLAGS = {
-  "Deutschland": "🇩🇪", "Frankreich": "🇫🇷", "Niederlande": "🇳🇱", "Italien": "🇮🇹",
-  "Spanien": "🇪🇸", "Österreich": "🇦🇹", "Schweiz": "🇨🇭", "Großbritannien": "🇬🇧",
-  "England": "🇬🇧", "Irland": "🇮🇪", "Portugal": "🇵🇹", "Griechenland": "🇬🇷",
-  "Polen": "🇵🇱", "Tschechien": "🇨🇿", "Belgien": "🇧🇪", "Luxemburg": "🇱🇺",
-  "Dänemark": "🇩🇰", "Schweden": "🇸🇪", "Norwegen": "🇳🇴", "Finnland": "🇫🇮",
-  "Malta": "🇲🇹", "Kroatien": "🇭🇷", "Ungarn": "🇭🇺", "Türkei": "🇹🇷",
-  "USA": "🇺🇸", "Kanada": "🇨🇦", "Israel": "🇮🇱", "Marokko": "🇲🇦",
-  "Vereinigtes Königreich": "🇬🇧", "Niederlande/Holland": "🇳🇱",
-};
-const flag = (land) => FLAGS[land] || "🌍";
+// Flagge aus dem ISO-Ländercode (siehe LAND_CC in taxonomy.js)
+const flag = (land) => flagEmoji(LAND_CC[land]);
 
 const fmtDate = (iso) => {
   if (!iso) return "";
@@ -71,6 +62,35 @@ function initMap() {
   cluster = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 45 });
   map.addLayer(cluster);
   map.on("moveend", () => { if ($("#f-bbox").checked) applyFilters(); });
+
+  // „Mein Standort"-Control
+  const locate = L.control({ position: "topleft" });
+  locate.onAdd = () => {
+    const div = L.DomUtil.create("div", "leaflet-bar locate-ctrl");
+    div.innerHTML = '<a href="#" title="Meinen Standort anzeigen" role="button">📍</a>';
+    L.DomEvent.on(div, "click", (e) => {
+      L.DomEvent.stop(e);
+      div.classList.add("locating");
+      map.locate({ setView: true, maxZoom: 11, enableHighAccuracy: true });
+    });
+    return div;
+  };
+  locate.addTo(map);
+
+  let meMarker = null;
+  map.on("locationfound", (e) => {
+    document.querySelector(".locate-ctrl")?.classList.remove("locating");
+    if (meMarker) map.removeLayer(meMarker);
+    meMarker = L.layerGroup([
+      L.circle(e.latlng, { radius: e.accuracy, color: "#2563eb", weight: 1, fillOpacity: 0.1 }),
+      L.circleMarker(e.latlng, { radius: 7, color: "#fff", weight: 2, fillColor: "#2563eb", fillOpacity: 1 })
+        .bindPopup("Dein Standort"),
+    ]).addTo(map);
+  });
+  map.on("locationerror", () => {
+    document.querySelector(".locate-ctrl")?.classList.remove("locating");
+    alert("Standort konnte nicht ermittelt werden. Bitte Standortzugriff im Browser erlauben.");
+  });
 }
 
 function buildFilterOptions() {
@@ -103,7 +123,7 @@ function buildFilterOptions() {
       if (!count) continue;
       const opt = document.createElement("option");
       opt.value = cid;
-      opt.textContent = `${DATA.categories[cid].name} (${count})`;
+      opt.textContent = `${catDisplayName(DATA.categories[cid].name)} (${count})`;
       og.appendChild(opt);
     }
     if (og.children.length) catSel.appendChild(og);
@@ -170,9 +190,9 @@ function restoreFromURL() {
     if (bucket && BUCKET_BY_ID[bucket]) {
       sel = { type: "bucket", cid: cat, bid: bucket, label: BUCKET_BY_ID[bucket].name };
     } else if (p.get("rest")) {
-      sel = { type: "rest", cid: cat, label: `${DATA.categories[cat].name} · Sonstige` };
+      sel = { type: "rest", cid: cat, label: `${catDisplayName(DATA.categories[cat].name)} · Sonstige` };
     } else {
-      sel = { type: "cat", cid: cat, label: DATA.categories[cat].name };
+      sel = { type: "cat", cid: cat, label: catDisplayName(DATA.categories[cat].name) };
     }
   }
   if (sel && sel.type !== "group") $("#f-cat").value = sel.cid;
@@ -290,6 +310,7 @@ function applyFilters() {
   renderList(true);
   renderMarkers();
   if (document.body.dataset.view === "mm") renderMindmap();
+  if (document.body.dataset.view === "swipe") startSwipe();
 }
 
 function setSelection(newSel) {
@@ -449,7 +470,7 @@ function selFromNode(d) {
     case "group":  return { type: "group", gid: d.gid, label: `${d.icon} ${d.name}` };
     case "cat":    return { type: "cat", cid: d.cid, label: d.name };
     case "bucket": return { type: "bucket", cid: d.cid, bid: d.bid, label: d.name };
-    case "rest":   return { type: "rest", cid: d.cid, label: `${DATA.categories[d.cid].name} · Sonstige` };
+    case "rest":   return { type: "rest", cid: d.cid, label: `${catDisplayName(DATA.categories[d.cid].name)} · Sonstige` };
   }
   return null;
 }
@@ -481,7 +502,7 @@ function bindEvents() {
   // Kategorie-Dropdown ist eine Themen-Auswahl wie die Entdecken-Ansicht
   $("#f-cat").addEventListener("change", () => {
     const v = $("#f-cat").value;
-    setSelection(v ? { type: "cat", cid: v, label: DATA.categories[v].name } : null);
+    setSelection(v ? { type: "cat", cid: v, label: catDisplayName(DATA.categories[v].name) } : null);
   });
 
   $("#filter-toggle").addEventListener("click", () => {
@@ -576,8 +597,14 @@ function bindEvents() {
   });
 
   $("#tab-mm").addEventListener("click", () => switchView("mm"));
+  $("#tab-swipe").addEventListener("click", () => switchView("swipe"));
   $("#tab-map").addEventListener("click", () => switchView("map"));
   $("#tab-list").addEventListener("click", () => switchView("list"));
+
+  // Zufall/Swipe-Ansicht
+  $("#sw-skip").addEventListener("click", () => swipeButton(false));
+  $("#sw-like").addEventListener("click", () => swipeButton(true));
+  $("#sw-info").addEventListener("click", swipeShowOnMap);
   $("#mm-panel-close").addEventListener("click", hidePanel);
   $("#mm-to-list").addEventListener("click", () => applyPanelSelection("list"));
   $("#mm-to-map").addEventListener("click", () => applyPanelSelection("map"));
@@ -589,6 +616,7 @@ function bindEvents() {
 function switchView(view) {
   document.body.dataset.view = view;
   $("#tab-mm").classList.toggle("active", view === "mm");
+  $("#tab-swipe").classList.toggle("active", view === "swipe");
   $("#tab-map").classList.toggle("active", view === "map");
   $("#tab-list").classList.toggle("active", view === "list");
   const p = new URLSearchParams(location.search);
@@ -596,6 +624,7 @@ function switchView(view) {
   history.replaceState(null, "", p.toString() ? `?${p}` : location.pathname);
   if (view === "map") setTimeout(() => map.invalidateSize(), 50);
   if (view === "mm") setTimeout(renderMindmap, 0);
+  if (view === "swipe") startSwipe();
 }
 
 init().catch((err) => {

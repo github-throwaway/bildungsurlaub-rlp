@@ -356,6 +356,59 @@ body[data-view="mm"] #map, body[data-view="mm"] .results { display: none; }
 .cat-chip--place { background: #2456a8; }
 .cat-chip--place:hover { background: #1b4080; }
 
+/* ---------- Standort-Button (Karte) ---------- */
+.locate-ctrl a { font-size: 17px; line-height: 28px; text-align: center; }
+.locate-ctrl.locating a { opacity: .4; }
+
+/* ---------- Zufall / Swipe ---------- */
+#swipe-view { display: none; }
+body[data-view="swipe"] #map,
+body[data-view="swipe"] .results,
+body[data-view="swipe"] #mindmap-view { display: none; }
+body[data-view="swipe"] #swipe-view {
+  display: flex; flex: 1; min-width: 0;
+  flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; padding: 16px;
+}
+#swipe-progress { font-size: .8rem; color: var(--muted); }
+#swipe-deck { position: relative; width: min(440px, 92vw); height: min(460px, 58vh); }
+.swipe-card {
+  position: absolute; inset: 0;
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  box-shadow: 0 6px 24px rgba(20, 30, 50, .14);
+  padding: 22px; display: flex; flex-direction: column; gap: 12px;
+  cursor: grab; user-select: none; touch-action: none; overflow: hidden;
+}
+.swipe-card.top:active { cursor: grabbing; }
+.swipe-card:not(.top) { transform: scale(.94) translateY(12px); opacity: .6; }
+.swipe-card h2 { margin: 0; font-size: 1.3rem; line-height: 1.3; }
+.sw-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.sw-org { color: var(--text); font-size: .95rem; }
+.sw-links { margin-top: auto; display: flex; flex-wrap: wrap; gap: 12px; font-size: .9rem; }
+.sw-links a { color: var(--accent); text-decoration: none; }
+.sw-links a:hover { text-decoration: underline; }
+.sw-stamp {
+  position: absolute; top: 22px; font-size: 1.3rem; font-weight: 800;
+  padding: 4px 12px; border-radius: 8px; border: 3px solid;
+  opacity: 0; transition: opacity .1s;
+}
+.sw-stamp--like { right: 22px; color: #16a34a; border-color: #16a34a; transform: rotate(14deg); }
+.sw-stamp--nope { left: 22px; color: var(--accent); border-color: var(--accent); transform: rotate(-14deg); }
+.swipe-card.like .sw-stamp--like { opacity: 1; }
+.swipe-card.nope .sw-stamp--nope { opacity: 1; }
+#swipe-actions { display: flex; gap: 24px; }
+.sw-btn {
+  width: 60px; height: 60px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--card);
+  cursor: pointer; font-size: 1.5rem; box-shadow: var(--shadow);
+  transition: transform .12s;
+}
+.sw-btn:hover { transform: scale(1.08); }
+.sw-btn--like { color: #f5a623; }
+.sw-btn--skip { color: var(--accent); }
+.sw-btn--info { font-size: 1.3rem; }
+#swipe-empty { text-align: center; color: var(--muted); font-size: 1rem; }
+
 /* ---------- View-Tabs ---------- */
 .view-tabs {
   display: flex;
@@ -412,6 +465,10 @@ body[data-view="list"] .results { max-width: none; border-left: none; }
     border-radius: 16px 16px 0 0;
   }
 
-  .view-tabs button { padding: 12px 8px; }
+  .view-tabs button { padding: 12px 6px; font-size: .82rem; }
   .fav-btn { font-size: 1.6rem; padding: 0 4px; }
+
+  body[data-view="swipe"] #swipe-view { gap: 10px; padding: 10px; }
+  #swipe-deck { height: min(440px, 50vh); }
+  .sw-btn { width: 54px; height: 54px; font-size: 1.35rem; }
 }
