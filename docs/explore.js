@@ -34,10 +34,9 @@ function buildExploreTree() {
 
       // „Weitere Sprachen" (cat 23) nur nach Sprache aufschlüsseln,
       // nicht nach generischen Kurs-Buckets (Intensivkurse etc.)
-      const langOnly = cid === "23";
       const perBucket = {};
       for (const e of evs) for (const b of e.buckets) {
-        if (langOnly && !b.startsWith("lang-")) continue;
+        if (!bucketAllowed(cid, b)) continue;
         (perBucket[b] ??= []).push(e);
       }
       const bucketNodes = Object.entries(perBucket)

@@ -83,6 +83,14 @@ function catDisplayName(name) {
   return name.replace(/^Fremdsprache\s+/, "");
 }
 
+// Kategorien, die nur nach Sprache (lang-*) aufgeschlüsselt werden, nicht
+// nach generischen Kurs-Buckets. Wird von Baumaufbau UND Filter genutzt,
+// damit Baum-„Sonstige" und „In Liste öffnen" dieselbe Treffermenge ergeben.
+const LANG_ONLY_CATS = new Set(["23"]);
+function bucketAllowed(cid, bid) {
+  return !LANG_ONLY_CATS.has(cid) || bid.startsWith("lang-");
+}
+
 /* Eigene Verfeinerungs-Ebene: Keyword-Buckets über den Titel */
 const REFINE_BUCKETS = [
   { id: "yoga",        name: "Yoga",                    re: /yoga/i },

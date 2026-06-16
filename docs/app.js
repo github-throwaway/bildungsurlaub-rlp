@@ -137,7 +137,10 @@ function computeCatBuckets() {
   for (const e of DATA.events) {
     for (const c of e.cats) {
       const m = (counts[c] ??= {});
-      for (const b of e.buckets) m[b] = (m[b] || 0) + 1;
+      for (const b of e.buckets) {
+        if (!bucketAllowed(c, b)) continue;
+        m[b] = (m[b] || 0) + 1;
+      }
     }
   }
   for (const cid in counts) {
