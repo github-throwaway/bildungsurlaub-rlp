@@ -21,7 +21,10 @@
 
   <section class="filters" id="filters">
     <div class="filter-row filter-row--primary">
-      <input type="search" id="f-text" class="search-input" placeholder="🔍 Suche in Titel, Ort, Veranstalter …" autocomplete="off">
+      <div class="search-wrap">
+        <input type="search" id="f-text" class="search-input" placeholder="🔍 Suche in Titel, Ort, Veranstalter …" autocomplete="off">
+        <button type="button" id="search-clear" class="search-clear" aria-label="Suche löschen" hidden>✕</button>
+      </div>
       <button id="filter-toggle" class="filter-toggle" aria-expanded="false">⚙ Filter</button>
       <span class="spacer"></span>
       <span id="active-place" class="cat-chip cat-chip--place" hidden></span>
@@ -134,8 +137,8 @@
   </main>
 
   <nav class="view-tabs">
-    <button id="tab-mm" class="active">🧠 Entdecken</button>
     <button id="tab-swipe">🎲 Zufall</button>
+    <button id="tab-mm" class="active">🧠 Entdecken</button>
     <button id="tab-map"><span class="lbl-desktop">🗺️ Karte &amp; Liste</span><span class="lbl-mobile">🗺️ Karte</span></button>
     <button id="tab-list">📋 Liste</button>
   </nav>
