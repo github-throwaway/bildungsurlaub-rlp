@@ -41,6 +41,33 @@ DATE_RE = re.compile(r"(\d{2})\.(\d{2})\.(\d{4})")
 # Reine Online-Veranstaltungen haben keinen geocodierbaren Ort
 NON_PLACES = {"online", "live-online", "webinar", "digital"}
 
+# Quell-Ländernamen -> ISO-3166-1-alpha-2. Die Geokodierung wird damit
+# aufs Land beschränkt (countrycodes), sonst landet z. B. das fehlerhaft
+# erfasste "Koppenhagen, Dänemark" beim gleichnamigen Weiler in Hessen.
+LAND_TO_CC = {
+    "Deutschland": "de", "Spanien": "es", "Italien": "it", "Frankreich": "fr",
+    "U.K.": "gb", "Polen": "pl", "Österreich": "at", "Ireland": "ie",
+    "Malta": "mt", "Niederlande": "nl", "Portugal": "pt", "U.S.A.": "us",
+    "South Africa": "za", "Griechenland": "gr", "Canada": "ca", "Schweden": "se",
+    "Costa Rica": "cr", "Schweiz": "ch", "Mexico": "mx", "Norwegen": "no",
+    "Kolumbien": "co", "Tschech.Republik": "cz", "Japan": "jp", "Belgien": "be",
+    "Thailand": "th", "Jordanien": "jo", "Australien": "au", "Marokko": "ma",
+    "VR China": "cn", "Sri Lanka": "lk", "Albanien": "al", "Dänemark": "dk",
+    "Türkei": "tr", "Panama": "pa", "Peru": "pe", "Kroatien": "hr",
+    "Ecuador": "ec", "Indonesien": "id", "Litauen": "lt", "Guatemala": "gt",
+    "Brasilien": "br", "Ukraine": "ua", "Estland": "ee", "Vietnam": "vn",
+    "Ägypten": "eg", "Indien": "in", "Guadeloupe": "gp", "Zypern": "cy",
+    "Georgien": "ge", "Cuba": "cu", "Argentinien": "ar", "Tanzania": "tz",
+    "Lettland": "lv", "Russland": "ru", "Südkorea": "kr", "Oman": "om",
+    "Island": "is", "Ungarn": "hu", "Bulgarien": "bg", "Luxembourg": "lu",
+    "New Zealand": "nz", "Verein.Arab.Emirate": "ae", "Bhutan": "bt",
+    "Rumänien": "ro", "Chile": "cl", "Uruguay": "uy", "Dominikan.Republik": "do",
+    "Barbados": "bb", "Namibia": "na", "Uganda": "ug", "Armenien": "am",
+    "Aserbaidschan": "az", "Libanon": "lb", "Bosnien-Herzegowina": "ba",
+    "Cabo Verde": "cv", "Kenia": "ke", "Singapore": "sg", "Nicaragua": "ni",
+    "Nepal": "np", "Ruanda": "rw", "El Salvador": "sv",
+}
+
 # Offizielle Unterkategorien aus dem id_stichwort-Dropdown der Suchmaske.
 # Pro Kategorie eine eigene Suchanfrage -> Events werden damit getaggt.
 GROUPS = {
@@ -273,28 +300,29 @@ def geocode_places(events: list[dict]) -> dict:
         if ort.strip().lower() in NON_PLACES:
             cache[key] = None
             continue
-        # Erst "Ort, Land", dann nur Ort als Fallback
-        for query in (f"{ort}, {land}" if land else ort, ort):
-            try:
-                resp = session.get(
-                    "https://nominatim.openstreetmap.org/search",
-                    params={
-                        "q": query,
-                        "format": "jsonv2",
-                        "limit": 1,
-                        "accept-language": "de",
-                    },
-                    timeout=30,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-            except requests.RequestException as exc:
-                print(f"  Fehler bei {query!r}: {exc}", file=sys.stderr)
-                data = []
-            time.sleep(1.1)  # Nominatim-Limit: max. 1 Request/Sekunde
-            if data:
-                coords = [round(float(data[0]["lat"]), 5), round(float(data[0]["lon"]), 5)]
-                break
+        # Suche aufs Land beschränken (countrycodes). Findet sich der Ort
+        # nicht im angegebenen Land (z. B. Tippfehler), bleibt der Pin leer –
+        # besser kein Pin als ein Pin im falschen Land. Nur ohne bekanntes
+        # Land wird unbeschränkt gesucht.
+        cc = LAND_TO_CC.get(land)
+        params = {"q": ort, "format": "jsonv2", "limit": 1, "accept-language": "de"}
+        if cc:
+            params["countrycodes"] = cc
+        elif land:
+            params["q"] = f"{ort}, {land}"
+        try:
+            resp = session.get(
+                "https://nominatim.openstreetmap.org/search",
+                params=params, timeout=30,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except requests.RequestException as exc:
+            print(f"  Fehler bei {key!r}: {exc}", file=sys.stderr)
+            data = []
+        time.sleep(1.1)  # Nominatim-Limit: max. 1 Request/Sekunde
+        if data:
+            coords = [round(float(data[0]["lat"]), 5), round(float(data[0]["lon"]), 5)]
         cache[key] = coords
         print(f"  [{n}/{len(todo)}] {key} -> {coords}")
         if n % 25 == 0:
