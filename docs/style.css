@@ -204,15 +204,15 @@ button.badge { font: inherit; cursor: pointer; }
 .empty { text-align: center; color: var(--muted); padding: 40px 10px; }
 
 /* ---------- Karte / Popups ---------- */
-/* Hauchdünne Linien zwischen Kacheln auf HiDPI-Displays vermeiden:
-   Kacheln behalten ihre echte Größe (kein Skalieren/Antialiasing), jede
-   Kachel bekommt einen eigenen GPU-Layer für pixelgenaues Compositing,
-   und der Karten-Hintergrund ist neutral statt weiß. */
+/* Weiße Linien zwischen Kacheln auf Displays mit fraktionalem Pixel-
+   verhältnis (Retina, Windows 125/150 %) entstehen durch Sub-Pixel-Lücken.
+   1 px Kachel-Überlappung schließt diese Lücken zuverlässig; der neutrale
+   Hintergrund kaschiert eventuelle Reste. */
 .leaflet-container { background: #dfe1e5; }
 .leaflet-tile {
+  width: 257px !important;
+  height: 257px !important;
   box-sizing: content-box;
-  will-change: transform;
-  backface-visibility: hidden;
 }
 .leaflet-popup-content { margin: 10px 14px; max-height: 260px; overflow-y: auto; }
 .popup-event { padding: 6px 0; border-bottom: 1px solid var(--border); }

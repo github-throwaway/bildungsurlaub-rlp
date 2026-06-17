@@ -668,6 +668,22 @@ function renderRadialViz() {
   const links = root.links();
   for (const n of nodes) [n.cx, n.cy] = d3.pointRadial(n.x, n.y);
 
+  // Label-Entzerrung: pro Ebene den Winkelabstand zum nächsten Nachbarn
+  // bestimmen. Nur beschriften, wenn die Bogenlänge (Winkel × Radius) für
+  // eine Zeile reicht – sonst erscheint das Label nur beim Überfahren.
+  const byDepth = {};
+  for (const n of nodes) (byDepth[n.depth] ??= []).push(n);
+  for (const arr of Object.values(byDepth)) {
+    arr.sort((a, b) => a.x - b.x);
+    arr.forEach((n, i) => {
+      const gap = Math.min(
+        i > 0 ? n.x - arr[i - 1].x : Infinity,
+        i < arr.length - 1 ? arr[i + 1].x - n.x : Infinity
+      );
+      n.labelShown = n.depth === 0 || gap * n.y > 13;
+    });
+  }
+
   const t = d3.transition().duration(300);
 
   // Mindmap so einpassen, dass sie den sichtbaren Bereich gut ausfüllt –
@@ -698,7 +714,12 @@ function renderRadialViz() {
       return g;
     })
     .classed("selected", (n) => vizSelected === n.data.id)
-    .on("click", (ev, d) => radialClick(d.data));
+    .on("click", (ev, d) => radialClick(d.data))
+    // Hover blendet ggf. verstecktes Label ein und hebt den Knoten nach vorn
+    .on("mouseover", function () { d3.select(this).raise().select("text.mm-label").attr("fill-opacity", 1); })
+    .on("mouseout", function (ev, n) {
+      d3.select(this).select("text.mm-label").attr("fill-opacity", n.labelShown ? 1 : 0);
+    });
 
   nodeSel.transition(t).attr("opacity", 1).attr("transform", (n) => `translate(${n.cx},${n.cy})`);
 
@@ -713,6 +734,7 @@ function renderRadialViz() {
     const d = n.data;
     const tx = d3.select(this);
     tx.selectAll("tspan").remove();
+    tx.attr("fill-opacity", n.labelShown ? 1 : 0); // entzerrt: zu enge Labels nur bei Hover
     if (d.kind === "root") {
       // Wurzel-Label über dem Mittelpunkt, waagerecht
       tx.attr("transform", null).attr("text-anchor", "middle").attr("x", 0).attr("dy", "-1.5em")
