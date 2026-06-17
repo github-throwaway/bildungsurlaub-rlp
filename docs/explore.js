@@ -9,7 +9,8 @@ const VIZ_HINTS = {
   pack: "Blase anklicken = hineinzoomen und Veranstaltungen ansehen · Klick auf den Hintergrund = herauszoomen",
   treemap: "Kachel anklicken = eine Ebene tiefer · Pfad oben = zurück · Blasse Kacheln sind Unterthemen mit Veranstaltungen",
   sunburst: "Segment anklicken = hineinzoomen und Veranstaltungen ansehen · Klick auf die Mitte = zurück",
-  tree: "Thema anklicken = aufklappen · Unterthema anklicken = Veranstaltungen ansehen · gestrichelte Linien = thematische Überschneidung",
+  tree: "Thema anklicken = aufklappen (immer ein Zweig) · Unterthema anklicken = Veranstaltungen ansehen · ziehen/scrollen zum Navigieren",
+  radial: "Knoten anklicken = in alle Richtungen aufklappen · Unterthema anklicken = Veranstaltungen ansehen · ziehen/scrollen zum Navigieren",
   tiles: "Karte anklicken = eine Ebene tiefer bzw. Veranstaltungen ansehen · Pfad oben = zurück",
 };
 
@@ -155,10 +156,11 @@ function renderMindmap() {
     svg.on(".zoom", null).on("click", null);
     svg.selectAll("*").remove();
     TREE.inited = false;
+    RADIAL.inited = false;
     svgModeReady = vizMode;
   }
   ({ pack: renderPackViz, treemap: renderTreemapViz, sunburst: renderSunburstViz,
-     tree: renderTreeViz, tiles: renderTilesViz })[vizMode]();
+     tree: renderTreeViz, radial: renderRadialViz, tiles: renderTilesViz })[vizMode]();
 }
 
 function vizClearSelection() {
@@ -502,10 +504,11 @@ function initTreeViz() {
   TREE.centered = false;
 }
 
-function pruneForTree(node) {
+// Baum auf die im jeweiligen View aufgeklappten Knoten reduzieren
+function pruneTree(node, expanded) {
   const copy = { ...node, name: vizLabel(node), kids: node.children || [] };
-  copy.children = (node.kind === "root" || TREE.expanded.has(node.id)) && node.children
-    ? node.children.map(pruneForTree)
+  copy.children = (node.kind === "root" || expanded.has(node.id)) && node.children
+    ? node.children.map((c) => pruneTree(c, expanded))
     : null;
   return copy;
 }
@@ -523,7 +526,7 @@ function renderTreeViz() {
   const rect = $("#mindmap-view").getBoundingClientRect();
   svg.attr("viewBox", [0, 0, rect.width, rect.height]);
 
-  const root = d3.hierarchy(pruneForTree(buildExploreTree()));
+  const root = d3.hierarchy(pruneTree(buildExploreTree(), TREE.expanded));
   d3.tree().nodeSize([MM_ROW, MM_COL])(root);
   const nodes = root.descendants().filter((d) => d.depth > 0);
   const links = root.links().filter((l) => l.source.depth > 0);
@@ -550,23 +553,6 @@ function renderTreeViz() {
     .transition(t)
     .attr("opacity", 1)
     .attr("d", (l) => treeLinkPath(l.source, l.target));
-
-  // Querverbindungen: gleiches Unterthema unter verschiedenen Kategorien
-  const byBid = {};
-  for (const n of nodes) if (n.data.kind === "bucket") (byBid[n.data.bid] ??= []).push(n);
-  const cross = [];
-  for (const group of Object.values(byBid)) {
-    group.sort((a, b) => a.py - b.py);
-    for (let i = 0; i < group.length - 1; i++) cross.push([group[i], group[i + 1]]);
-  }
-  TREE.g.select(".mm-cross").selectAll("path")
-    .data(cross, (c) => `${c[0].data.id}|${c[1].data.id}`)
-    .join("path")
-    .attr("class", "mm-link--cross")
-    .attr("d", (c) => {
-      const bow = Math.max(c[0].px, c[1].px) + 170;
-      return `M${c[0].px},${c[0].py} C${bow},${c[0].py} ${bow},${c[1].py} ${c[1].px},${c[1].py}`;
-    });
 
   const nodeSel = TREE.g.select(".mm-nodes").selectAll("g.mm-node")
     .data(nodes, (n) => n.data.id)
@@ -620,9 +606,12 @@ function treeClick(d) {
     if (TREE.expanded.has(d.id)) {
       TREE.expanded.delete(d.id);
       for (const kid of d.kids) TREE.expanded.delete(kid.id);
-      if (vizSelected?.startsWith("c:") || vizSelected?.startsWith("b:")) hidePanel();
+      hidePanel();
     } else {
+      // Akkordeon: nur ein Zweig offen -> übrige Gruppen/Kategorien zuklappen
+      TREE.expanded.clear();
       TREE.expanded.add(d.id);
+      hidePanel();
     }
     renderTreeViz();
     return;
@@ -632,6 +621,10 @@ function treeClick(d) {
       TREE.expanded.delete(d.id);
       hidePanel();
     } else {
+      // Geschwister-Kategorien derselben Gruppe zuklappen
+      for (const c of CAT_GROUPS[d.gid]?.cats || []) {
+        if (`c:${c}` !== d.id) TREE.expanded.delete(`c:${c}`);
+      }
       if (d.kids.length) TREE.expanded.add(d.id);
       vizSelect(d);
     }
@@ -643,7 +636,137 @@ function treeClick(d) {
 }
 
 /* ====================================================================
-   5) Kachel-Browser (ohne Chart)
+   5) Radiale Mindmap – klappt in alle Richtungen auf
+==================================================================== */
+
+const RADIAL = { inited: false, g: null, zoom: null, expanded: new Set(), centered: false };
+
+function initRadialViz() {
+  const svg = d3.select("#mindmap");
+  RADIAL.g = svg.append("g");
+  RADIAL.g.append("g").attr("class", "mm-links");
+  RADIAL.g.append("g").attr("class", "mm-nodes");
+  RADIAL.zoom = d3.zoom().scaleExtent([0.3, 2.5])
+    .on("zoom", (ev) => RADIAL.g.attr("transform", ev.transform));
+  svg.call(RADIAL.zoom);
+  RADIAL.inited = true;
+  RADIAL.centered = false;
+}
+
+function renderRadialViz() {
+  if (!RADIAL.inited) initRadialViz();
+  const svg = d3.select("#mindmap");
+  const rect = $("#mindmap-view").getBoundingClientRect();
+  svg.attr("viewBox", [-rect.width / 2, -rect.height / 2, rect.width, rect.height]);
+  const radius = Math.min(rect.width, rect.height) / 2 - 90;
+
+  const root = d3.hierarchy(pruneTree(buildExploreTree(), RADIAL.expanded));
+  d3.tree()
+    .size([2 * Math.PI, radius])
+    .separation((a, b) => (a.parent === b.parent ? 1 : 2) / Math.max(1, a.depth))(root);
+  const nodes = root.descendants();
+  const links = root.links();
+  for (const n of nodes) [n.cx, n.cy] = d3.pointRadial(n.x, n.y);
+
+  const t = d3.transition().duration(300);
+
+  // Mindmap so einpassen, dass sie den sichtbaren Bereich gut ausfüllt –
+  // wächst sie beim Aufklappen, bleibt trotzdem alles im Blick.
+  const pad = 70;
+  const xs = nodes.map((n) => n.cx), ys = nodes.map((n) => n.cy);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const w = maxX - minX || 1, h = maxY - minY || 1;
+  const scale = Math.max(0.3, Math.min(2.2, (rect.width - pad * 2) / w, (rect.height - pad * 2) / h));
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  const fit = d3.zoomIdentity.translate(-scale * cx, -scale * cy).scale(scale);
+  svg.transition(t).call(RADIAL.zoom.transform, fit);
+  const linkGen = d3.linkRadial().angle((d) => d.x).radius((d) => d.y);
+
+  RADIAL.g.select(".mm-links").selectAll("path")
+    .data(links, (l) => l.target.data.id)
+    .join((enter) => enter.append("path").attr("class", "mm-link").attr("opacity", 0).attr("d", linkGen))
+    .transition(t).attr("opacity", 1).attr("d", linkGen);
+
+  const nodeSel = RADIAL.g.select(".mm-nodes").selectAll("g.mm-node")
+    .data(nodes, (n) => n.data.id)
+    .join((enter) => {
+      const g = enter.append("g").attr("class", "mm-node").attr("opacity", 0);
+      g.append("circle");
+      g.append("text").attr("class", "mm-label");
+      g.append("title");
+      return g;
+    })
+    .classed("selected", (n) => vizSelected === n.data.id)
+    .on("click", (ev, d) => radialClick(d.data));
+
+  nodeSel.transition(t).attr("opacity", 1).attr("transform", (n) => `translate(${n.cx},${n.cy})`);
+
+  nodeSel.select("circle")
+    .attr("r", (n) => (n.data.kind === "root" ? 8 : treeRadius(n.data)))
+    .attr("fill", (n) => (n.data.kind === "root" ? "#1c2430" : nodeColor(n.data)))
+    .attr("fill-opacity", (n) => (n.data.kind === "bucket" || n.data.kind === "rest" ? 0.6 : 1));
+
+  nodeSel.select("title").text((n) => `${n.data.name} (${n.data.events.length})`);
+
+  nodeSel.select("text.mm-label").each(function (n) {
+    const d = n.data;
+    const tx = d3.select(this);
+    tx.selectAll("tspan").remove();
+    if (d.kind === "root") {
+      // Wurzel-Label über dem Mittelpunkt, waagerecht
+      tx.attr("transform", null).attr("text-anchor", "middle").attr("x", 0).attr("dy", "-1.5em")
+        .attr("font-size", 13).attr("font-weight", 700);
+      tx.append("tspan").text(d.name);
+      return;
+    }
+    // Label radial entlang der Speiche ausrichten (linke Hälfte gespiegelt),
+    // damit benachbarte Beschriftungen auffächern statt sich zu überlappen
+    const flip = n.x >= Math.PI;
+    const r = treeRadius(d) + 6;
+    tx.attr("text-anchor", flip ? "end" : "start")
+      .attr("dy", "0.32em")
+      .attr("transform", `rotate(${n.x * 180 / Math.PI - 90}) translate(${r},0)${flip ? " rotate(180)" : ""}`)
+      .attr("font-size", d.kind === "group" ? 13 : d.kind === "cat" ? 11.5 : 10.5)
+      .attr("font-weight", d.kind === "group" ? 700 : d.kind === "cat" ? 600 : 400);
+    tx.append("tspan").text(d.name.length > 24 ? d.name.slice(0, 23) + "…" : d.name);
+    tx.append("tspan").attr("class", "mm-count").text(`  ${d.events.length}`);
+    if (d.kids?.length) {
+      tx.append("tspan").attr("class", "mm-chevron").text(RADIAL.expanded.has(d.id) ? " ▾" : " ▸");
+    }
+  });
+}
+
+function radialClick(d) {
+  if (d.kind === "root") return;
+  if (d.kind === "group") {
+    if (RADIAL.expanded.has(d.id)) {
+      RADIAL.expanded.delete(d.id);
+      for (const kid of d.kids) RADIAL.expanded.delete(kid.id);
+      hidePanel();
+    } else {
+      RADIAL.expanded.add(d.id); // freie Expansion in alle Richtungen
+    }
+    renderRadialViz();
+    return;
+  }
+  if (d.kind === "cat") {
+    if (vizSelected === d.id && RADIAL.expanded.has(d.id)) {
+      RADIAL.expanded.delete(d.id);
+      hidePanel();
+    } else {
+      if (d.kids.length) RADIAL.expanded.add(d.id);
+      vizSelect(d);
+    }
+    renderRadialViz();
+    return;
+  }
+  vizSelect(d);
+  renderRadialViz();
+}
+
+/* ====================================================================
+   6) Kachel-Browser (ohne Chart)
 ==================================================================== */
 
 function renderTilesViz() {

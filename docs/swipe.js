@@ -5,6 +5,7 @@
 
 let swipeQueue = [];
 let swipePos = 0;
+let swipeStale = true; // true -> beim nächsten Öffnen frisch mischen (z. B. nach Filteränderung)
 
 function shuffle(arr) {
   const a = arr.slice();
@@ -18,7 +19,15 @@ function shuffle(arr) {
 function startSwipe() {
   swipeQueue = shuffle(filtered);
   swipePos = 0;
+  swipeStale = false;
   renderSwipeDeck();
+}
+
+// Beim Wechsel in die Zufall-Ansicht: aktuelle Karte behalten, nur bei
+// veralteten Daten (Filteränderung) oder leerem Deck neu mischen.
+function ensureSwipe() {
+  if (swipeStale || !swipeQueue.length) startSwipe();
+  else renderSwipeDeck();
 }
 
 function swipeCardEl(e, isTop) {
@@ -96,10 +105,7 @@ function swipeButton(liked) {
 
 function swipeShowOnMap() {
   const e = swipeQueue[swipePos];
-  if (!e) return;
-  const c = DATA.places[`${e.ort}|${e.land}`];
-  switchView("map");
-  if (c) setTimeout(() => map.setView(c, 11), 70);
+  if (e) focusEventOnMap(e); // wechselt zur Karte, öffnet Marker, hebt Card in der Liste hervor
 }
 
 function attachSwipeDrag(card) {

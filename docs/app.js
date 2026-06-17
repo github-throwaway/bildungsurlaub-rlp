@@ -317,7 +317,10 @@ function applyFilters() {
   renderList(true);
   renderMarkers();
   if (document.body.dataset.view === "mm") renderMindmap();
+  // Filter haben sich geändert -> Zufalls-Deck neu mischen (sichtbar) bzw.
+  // als veraltet markieren (für den nächsten Wechsel in die Zufall-Ansicht)
   if (document.body.dataset.view === "swipe") startSwipe();
+  else swipeStale = true;
 }
 
 function setSelection(newSel) {
@@ -444,6 +447,35 @@ function popupHTML(ort, land, events) {
     </div>`).join("");
   const more = events.length > 15 ? `<div class="pmeta">… und ${events.length - 15} weitere (siehe Liste)</div>` : "";
   return head + items + more;
+}
+
+// Card mit gegebenem Index in der Liste hervorheben und (sofort) anspringen
+function highlightCardByIndex(idx) {
+  let card = document.querySelector(`.card[data-idx="${idx}"]`);
+  while (!card && shown < filtered.length) { renderList(false); card = document.querySelector(`.card[data-idx="${idx}"]`); }
+  if (!card) return null;
+  document.querySelectorAll(".card.highlight").forEach((c) => c.classList.remove("highlight"));
+  card.classList.add("highlight");
+  card.scrollIntoView({ block: "center" }); // sofort statt langsamem Smooth-Scroll
+  return card;
+}
+
+// Event auf der Karte zeigen: zur Kartenansicht wechseln, Marker öffnen
+// und die zugehörige Card in der (rechts sichtbaren) Liste hervorheben
+function focusEventOnMap(e) {
+  switchView("map");
+  highlightCardByIndex(DATA.events.indexOf(e));
+  const key = `${e.ort}|${e.land}`;
+  setTimeout(() => {
+    const marker = markersByPlace[key];
+    if (marker) {
+      map.setView(marker.getLatLng(), Math.max(map.getZoom() || 6, 11));
+      cluster.zoomToShowLayer(marker, () => marker.openPopup());
+    } else {
+      const c = DATA.places[key];
+      if (c) map.setView(c, 11);
+    }
+  }, 80);
 }
 
 /* ---------- Seitenpanel der Entdecken-Ansicht ----------
@@ -599,20 +631,10 @@ function bindEvents() {
     const link = ev.target.closest("[data-goto]");
     if (!link) return;
     ev.preventDefault();
-    const idx = link.dataset.goto;
     if (document.body.dataset.view === "map" && window.matchMedia("(max-width: 820px)").matches) {
       switchView("list");
     }
-    let card = document.querySelector(`.card[data-idx="${idx}"]`);
-    while (!card && shown < filtered.length) {  // ggf. nachladen
-      renderList(false);
-      card = document.querySelector(`.card[data-idx="${idx}"]`);
-    }
-    if (card) {
-      card.scrollIntoView({ behavior: "smooth", block: "center" });
-      document.querySelectorAll(".card.highlight").forEach((c) => c.classList.remove("highlight"));
-      card.classList.add("highlight");
-    }
+    highlightCardByIndex(+link.dataset.goto);
   });
 
   $("#tab-mm").addEventListener("click", () => switchView("mm"));
@@ -643,7 +665,7 @@ function switchView(view) {
   history.replaceState(null, "", p.toString() ? `?${p}` : location.pathname);
   if (view === "map") setTimeout(() => map.invalidateSize(), 50);
   if (view === "mm") setTimeout(renderMindmap, 0);
-  if (view === "swipe") startSwipe();
+  if (view === "swipe") ensureSwipe(); // behält die aktuelle Karte, mischt nur bei Bedarf neu
 }
 
 init().catch((err) => {
