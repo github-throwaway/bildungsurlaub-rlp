@@ -6,12 +6,9 @@
 let vizMode = null; // "pack" | "treemap" | "sunburst" | "tree" | "tiles"
 const VIZ_DEFAULT = "sunburst";
 const VIZ_HINTS = {
-  pack: "Blase anklicken = hineinzoomen und Veranstaltungen ansehen · Klick auf den Hintergrund = herauszoomen",
-  treemap: "Kachel anklicken = eine Ebene tiefer · Pfad oben = zurück · Blasse Kacheln sind Unterthemen mit Veranstaltungen",
   sunburst: "Segment anklicken = hineinzoomen und Veranstaltungen ansehen · Klick auf die Mitte = zurück",
-  tree: "Thema anklicken = aufklappen (immer ein Zweig) · Unterthema anklicken = Veranstaltungen ansehen · ziehen/scrollen zum Navigieren",
+  treemap: "Kachel anklicken = eine Ebene tiefer · Pfad oben = zurück · Blasse Kacheln sind Unterthemen mit Veranstaltungen",
   radial: "Knoten anklicken = in alle Richtungen aufklappen · Unterthema anklicken = Veranstaltungen ansehen · ziehen/scrollen zum Navigieren",
-  tiles: "Karte anklicken = eine Ebene tiefer bzw. Veranstaltungen ansehen · Pfad oben = zurück",
 };
 
 let vizSelected = null;   // Id des ausgewählten Knotens (Panel offen)
@@ -156,11 +153,12 @@ function renderMindmap() {
     svg.on(".zoom", null).on("click", null);
     svg.selectAll("*").remove();
     TREE.inited = false;
+    if (RADIAL.sim) RADIAL.sim.stop();
     RADIAL.inited = false;
+    RADIAL.linkSel = RADIAL.nodeSel = null;
     svgModeReady = vizMode;
   }
-  ({ pack: renderPackViz, treemap: renderTreemapViz, sunburst: renderSunburstViz,
-     tree: renderTreeViz, radial: renderRadialViz, tiles: renderTilesViz })[vizMode]();
+  ({ sunburst: renderSunburstViz, treemap: renderTreemapViz, radial: renderRadialViz })[vizMode]();
 }
 
 function vizClearSelection() {
@@ -639,66 +637,62 @@ function treeClick(d) {
    5) Radiale Mindmap – klappt in alle Richtungen auf
 ==================================================================== */
 
-const RADIAL = { inited: false, g: null, zoom: null, expanded: new Set(), centered: false };
+const RADIAL = { inited: false, g: null, zoom: null, expanded: new Set() };
 
 function initRadialViz() {
   const svg = d3.select("#mindmap");
   RADIAL.g = svg.append("g");
   RADIAL.g.append("g").attr("class", "mm-links");
   RADIAL.g.append("g").attr("class", "mm-nodes");
-  RADIAL.zoom = d3.zoom().scaleExtent([0.3, 2.5])
+  RADIAL.zoom = d3.zoom().scaleExtent([0.25, 2.5])
     .on("zoom", (ev) => RADIAL.g.attr("transform", ev.transform));
   svg.call(RADIAL.zoom);
   RADIAL.inited = true;
-  RADIAL.centered = false;
 }
 
+function radialRadius(d, n) {
+  return d.kind === "root" ? 9
+    : d.kind === "group" ? 7 + Math.sqrt(n) * 0.18
+    : d.kind === "cat" ? Math.min(11, 5 + Math.sqrt(n) * 0.35)
+    : Math.min(8, 4 + Math.sqrt(n) * 0.4);
+}
+
+// Knoten für Panel/Filter normalisieren (Gruppenname ohne Icon-Präfix)
+function radialNorm(d) {
+  return {
+    id: d.id, kind: d.kind, gid: d.gid, cid: d.cid, bid: d.bid, events: d.events,
+    name: d.kind === "root" ? "Alle Themen" : d.kind === "group" ? CAT_GROUPS[d.gid].name : d.name,
+    icon: d.icon,
+  };
+}
+
+// Radiales Tidy-Tree (Reingold–Tilford): planar -> es kreuzen sich nie Linien.
 function renderRadialViz() {
   if (!RADIAL.inited) initRadialViz();
   const svg = d3.select("#mindmap");
   const rect = $("#mindmap-view").getBoundingClientRect();
+  if (!rect.width) return;
   svg.attr("viewBox", [-rect.width / 2, -rect.height / 2, rect.width, rect.height]);
-  const radius = Math.min(rect.width, rect.height) / 2 - 90;
+  const radius = Math.min(rect.width, rect.height) / 2 - 80;
 
   const root = d3.hierarchy(pruneTree(buildExploreTree(), RADIAL.expanded));
-  d3.tree()
-    .size([2 * Math.PI, radius])
+  d3.tree().size([2 * Math.PI, radius])
     .separation((a, b) => (a.parent === b.parent ? 1 : 2) / Math.max(1, a.depth))(root);
   const nodes = root.descendants();
   const links = root.links();
   for (const n of nodes) [n.cx, n.cy] = d3.pointRadial(n.x, n.y);
 
-  // Label-Entzerrung: pro Ebene den Winkelabstand zum nächsten Nachbarn
-  // bestimmen. Nur beschriften, wenn die Bogenlänge (Winkel × Radius) für
-  // eine Zeile reicht – sonst erscheint das Label nur beim Überfahren.
-  const byDepth = {};
-  for (const n of nodes) (byDepth[n.depth] ??= []).push(n);
-  for (const arr of Object.values(byDepth)) {
-    arr.sort((a, b) => a.x - b.x);
-    arr.forEach((n, i) => {
-      const gap = Math.min(
-        i > 0 ? n.x - arr[i - 1].x : Infinity,
-        i < arr.length - 1 ? arr[i + 1].x - n.x : Infinity
-      );
-      n.labelShown = n.depth === 0 || gap * n.y > 13;
-    });
-  }
+  const t = d3.transition().duration(400);
 
-  const t = d3.transition().duration(300);
-
-  // Mindmap so einpassen, dass sie den sichtbaren Bereich gut ausfüllt –
-  // wächst sie beim Aufklappen, bleibt trotzdem alles im Blick.
-  const pad = 70;
+  // einpassen, damit die (wachsende) Mindmap den Bereich gut ausfüllt
+  const pad = 80;
   const xs = nodes.map((n) => n.cx), ys = nodes.map((n) => n.cy);
-  const minX = Math.min(...xs), maxX = Math.max(...xs);
-  const minY = Math.min(...ys), maxY = Math.max(...ys);
-  const w = maxX - minX || 1, h = maxY - minY || 1;
+  const w = (Math.max(...xs) - Math.min(...xs)) || 1, h = (Math.max(...ys) - Math.min(...ys)) || 1;
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
   const scale = Math.max(0.3, Math.min(2.2, (rect.width - pad * 2) / w, (rect.height - pad * 2) / h));
-  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-  const fit = d3.zoomIdentity.translate(-scale * cx, -scale * cy).scale(scale);
-  svg.transition(t).call(RADIAL.zoom.transform, fit);
-  const linkGen = d3.linkRadial().angle((d) => d.x).radius((d) => d.y);
+  svg.transition(t).call(RADIAL.zoom.transform, d3.zoomIdentity.translate(-scale * cx, -scale * cy).scale(scale));
 
+  const linkGen = d3.linkRadial().angle((d) => d.x).radius((d) => d.y);
   RADIAL.g.select(".mm-links").selectAll("path")
     .data(links, (l) => l.target.data.id)
     .join((enter) => enter.append("path").attr("class", "mm-link").attr("opacity", 0).attr("d", linkGen))
@@ -714,49 +708,65 @@ function renderRadialViz() {
       return g;
     })
     .classed("selected", (n) => vizSelected === n.data.id)
-    .on("click", (ev, d) => radialClick(d.data))
-    // Hover blendet ggf. verstecktes Label ein und hebt den Knoten nach vorn
+    .style("cursor", "pointer")
+    .on("click", (ev, n) => radialClick(n.data))
     .on("mouseover", function () { d3.select(this).raise().select("text.mm-label").attr("fill-opacity", 1); })
-    .on("mouseout", function (ev, n) {
-      d3.select(this).select("text.mm-label").attr("fill-opacity", n.labelShown ? 1 : 0);
-    });
+    .on("mouseout", function (ev, n) { d3.select(this).select("text.mm-label").attr("fill-opacity", n.labelShown ? 1 : 0); });
 
   nodeSel.transition(t).attr("opacity", 1).attr("transform", (n) => `translate(${n.cx},${n.cy})`);
 
   nodeSel.select("circle")
-    .attr("r", (n) => (n.data.kind === "root" ? 8 : treeRadius(n.data)))
+    .attr("r", (n) => radialRadius(n.data, n.data.events.length))
     .attr("fill", (n) => (n.data.kind === "root" ? "#1c2430" : nodeColor(n.data)))
     .attr("fill-opacity", (n) => (n.data.kind === "bucket" || n.data.kind === "rest" ? 0.6 : 1));
-
-  nodeSel.select("title").text((n) => `${n.data.name} (${n.data.events.length})`);
+  nodeSel.select("title").text((n) => `${radialNorm(n.data).name} (${n.data.events.length})`);
 
   nodeSel.select("text.mm-label").each(function (n) {
-    const d = n.data;
-    const tx = d3.select(this);
+    const d = n.data, tx = d3.select(this);
     tx.selectAll("tspan").remove();
-    tx.attr("fill-opacity", n.labelShown ? 1 : 0); // entzerrt: zu enge Labels nur bei Hover
+    tx.attr("transform", null);
     if (d.kind === "root") {
-      // Wurzel-Label über dem Mittelpunkt, waagerecht
-      tx.attr("transform", null).attr("text-anchor", "middle").attr("x", 0).attr("dy", "-1.5em")
+      tx.attr("text-anchor", "middle").attr("x", 0).attr("dy", "-1.5em")
         .attr("font-size", 13).attr("font-weight", 700);
-      tx.append("tspan").text(d.name);
+      tx.append("tspan").text("Alle Themen");
       return;
     }
-    // Label radial entlang der Speiche ausrichten (linke Hälfte gespiegelt),
-    // damit benachbarte Beschriftungen auffächern statt sich zu überlappen
-    const flip = n.x >= Math.PI;
-    const r = treeRadius(d) + 6;
-    tx.attr("text-anchor", flip ? "end" : "start")
-      .attr("dy", "0.32em")
-      .attr("transform", `rotate(${n.x * 180 / Math.PI - 90}) translate(${r},0)${flip ? " rotate(180)" : ""}`)
+    const right = n.cx >= 0;
+    const r = radialRadius(d, d.events.length) + 6;
+    const label = (d.kind === "group" && d.icon ? d.icon + " " : "") + radialNorm(d).name;
+    tx.attr("text-anchor", right ? "start" : "end")
+      .attr("x", r * (right ? 1 : -1)).attr("dy", "0.32em")
       .attr("font-size", d.kind === "group" ? 13 : d.kind === "cat" ? 11.5 : 10.5)
       .attr("font-weight", d.kind === "group" ? 700 : d.kind === "cat" ? 600 : 400);
-    tx.append("tspan").text(d.name.length > 24 ? d.name.slice(0, 23) + "…" : d.name);
+    tx.append("tspan").text(label.length > 26 ? label.slice(0, 25) + "…" : label);
     tx.append("tspan").attr("class", "mm-count").text(`  ${d.events.length}`);
-    if (d.kids?.length) {
-      tx.append("tspan").attr("class", "mm-chevron").text(RADIAL.expanded.has(d.id) ? " ▾" : " ▸");
+    if (d.kids && d.kids.length) {
+      tx.append("tspan").attr("class", "mm-chevron").text(RADIAL.expanded.has(d.id) ? " \u25be" : " \u25b8");
     }
   });
+
+  declutterRadialLabels(nodeSel, nodes);
+}
+
+// Greedy-Kollisionsentzerrung: wichtige Labels (flach/groß) zuerst; überlappende
+// werden ausgeblendet und nur bei Hover gezeigt -> keine zwei sichtbaren Labels
+// überlagern sich. (Die Linien des Tidy-Trees kreuzen sich ohnehin nicht.)
+function declutterRadialLabels(nodeSel, nodes) {
+  const elById = {};
+  nodeSel.each(function (n) { elById[n.data.id] = this.querySelector("text.mm-label"); });
+  const placed = [];
+  const hit = (a, b) => a.x < b.x + b.w + 2 && a.x + a.w > b.x - 2 && a.y < b.y + b.h + 2 && a.y + a.h > b.y - 2;
+  const ordered = nodes.slice().sort((a, b) => a.depth - b.depth || b.data.events.length - a.data.events.length);
+  for (const n of ordered) {
+    const el = elById[n.data.id];
+    if (!el) continue;
+    let b; try { b = el.getBBox(); } catch { continue; }
+    const box = { x: n.cx + b.x, y: n.cy + b.y, w: b.width, h: b.height };
+    const collide = n.data.kind !== "root" && placed.some((p) => hit(box, p));
+    n.labelShown = !collide;
+    el.setAttribute("fill-opacity", collide ? 0 : 1);
+    if (!collide) placed.push(box);
+  }
 }
 
 function radialClick(d) {
@@ -764,10 +774,10 @@ function radialClick(d) {
   if (d.kind === "group") {
     if (RADIAL.expanded.has(d.id)) {
       RADIAL.expanded.delete(d.id);
-      for (const kid of d.kids) RADIAL.expanded.delete(kid.id);
+      for (const c of CAT_GROUPS[d.gid]?.cats || []) RADIAL.expanded.delete(`c:${c}`);
       hidePanel();
     } else {
-      RADIAL.expanded.add(d.id); // freie Expansion in alle Richtungen
+      RADIAL.expanded.add(d.id);
     }
     renderRadialViz();
     return;
@@ -777,13 +787,13 @@ function radialClick(d) {
       RADIAL.expanded.delete(d.id);
       hidePanel();
     } else {
-      if (d.kids.length) RADIAL.expanded.add(d.id);
-      vizSelect(d);
+      if (d.kids && d.kids.length) RADIAL.expanded.add(d.id);
+      vizSelect(radialNorm(d));
     }
     renderRadialViz();
     return;
   }
-  vizSelect(d);
+  vizSelect(radialNorm(d));
   renderRadialViz();
 }
 
