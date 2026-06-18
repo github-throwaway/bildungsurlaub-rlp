@@ -637,7 +637,11 @@ function treeClick(d) {
    5) Radiale Mindmap – klappt in alle Richtungen auf
 ==================================================================== */
 
-const RADIAL = { inited: false, g: null, zoom: null, expanded: new Set() };
+const RADIAL = {
+  inited: false, g: null, zoom: null, sim: null,
+  linkSel: null, nodeSel: null,
+  expanded: new Set(), pos: new Map(),
+};
 
 function initRadialViz() {
   const svg = d3.select("#mindmap");
@@ -647,126 +651,113 @@ function initRadialViz() {
   RADIAL.zoom = d3.zoom().scaleExtent([0.25, 2.5])
     .on("zoom", (ev) => RADIAL.g.attr("transform", ev.transform));
   svg.call(RADIAL.zoom);
+  RADIAL.sim = d3.forceSimulation()
+    .force("link", d3.forceLink().id((d) => d.id).distance((l) => l.dist).strength((l) => l.dist < 90 ? 0.7 : 0.5))
+    .force("charge", d3.forceManyBody().strength(-340))
+    .force("collide", d3.forceCollide().radius((d) => d.r + 30).iterations(2))
+    .force("x", d3.forceX(0).strength(0.045))
+    .force("y", d3.forceY(0).strength(0.05))
+    .on("tick", radialTick);
   RADIAL.inited = true;
 }
 
-function radialRadius(d, n) {
-  return d.kind === "root" ? 9
-    : d.kind === "group" ? 7 + Math.sqrt(n) * 0.18
-    : d.kind === "cat" ? Math.min(11, 5 + Math.sqrt(n) * 0.35)
-    : Math.min(8, 4 + Math.sqrt(n) * 0.4);
-}
-
-// Knoten für Panel/Filter normalisieren (Gruppenname ohne Icon-Präfix)
-function radialNorm(d) {
-  return {
-    id: d.id, kind: d.kind, gid: d.gid, cid: d.cid, bid: d.bid, events: d.events,
-    name: d.kind === "root" ? "Alle Themen" : d.kind === "group" ? CAT_GROUPS[d.gid].name : d.name,
-    icon: d.icon,
+// Sichtbaren Baum (Wurzel -> aufgeklappte Gruppen/Kategorien/Unterthemen)
+// in eine flache Knoten-/Kantenliste für die Force-Mindmap umwandeln.
+function radialGraph() {
+  const tree = pruneTree(buildExploreTree(), RADIAL.expanded);
+  const nodes = [], links = [];
+  const walk = (node, parentId) => {
+    const n = node.events.length;
+    const r = node.kind === "root" ? 30
+      : node.kind === "group" ? 13 + Math.sqrt(n) * 0.22
+      : node.kind === "cat" ? Math.min(15, 7 + Math.sqrt(n) * 0.45)
+      : Math.min(11, 5 + Math.sqrt(n) * 0.5);
+    const name = node.kind === "root" ? "Alle Themen"
+      : node.kind === "group" ? CAT_GROUPS[node.gid].name : node.name;
+    nodes.push({
+      id: node.id, kind: node.kind, gid: node.gid, cid: node.cid, bid: node.bid,
+      name, icon: node.icon, events: node.events, count: n, r,
+      hasKids: !!(node.kids && node.kids.length),
+      expanded: RADIAL.expanded.has(node.id),
+      color: node.kind === "root" ? "#1c2430" : nodeColor(node),
+    });
+    if (parentId) {
+      links.push({ source: parentId, target: node.id,
+        dist: node.kind === "group" ? 150 : node.kind === "cat" ? 95 : 70 });
+    }
+    if (node.children) for (const c of node.children) walk(c, node.id);
   };
+  walk(tree, null);
+  return { nodes, links };
 }
 
-// Radiales Tidy-Tree (Reingold–Tilford): planar -> es kreuzen sich nie Linien.
 function renderRadialViz() {
   if (!RADIAL.inited) initRadialViz();
   const svg = d3.select("#mindmap");
   const rect = $("#mindmap-view").getBoundingClientRect();
   if (!rect.width) return;
   svg.attr("viewBox", [-rect.width / 2, -rect.height / 2, rect.width, rect.height]);
-  const radius = Math.min(rect.width, rect.height) / 2 - 80;
 
-  const root = d3.hierarchy(pruneTree(buildExploreTree(), RADIAL.expanded));
-  d3.tree().size([2 * Math.PI, radius])
-    .separation((a, b) => (a.parent === b.parent ? 1 : 2) / Math.max(1, a.depth))(root);
-  const nodes = root.descendants();
-  const links = root.links();
-  for (const n of nodes) [n.cx, n.cy] = d3.pointRadial(n.x, n.y);
+  const { nodes, links } = radialGraph();
+  for (const n of nodes) {
+    const p = RADIAL.pos.get(n.id);
+    if (p) { n.x = p.x; n.y = p.y; }
+    if (n.id === "root") { n.fx = 0; n.fy = 0; }
+  }
 
-  const t = d3.transition().duration(400);
+  RADIAL.linkSel = RADIAL.g.select(".mm-links").selectAll("line")
+    .data(links, (l) => `${l.source.id || l.source}->${l.target.id || l.target}`)
+    .join("line").attr("class", "mm-link");
 
-  // einpassen, damit die (wachsende) Mindmap den Bereich gut ausfüllt
-  const pad = 80;
-  const xs = nodes.map((n) => n.cx), ys = nodes.map((n) => n.cy);
-  const w = (Math.max(...xs) - Math.min(...xs)) || 1, h = (Math.max(...ys) - Math.min(...ys)) || 1;
-  const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
-  const scale = Math.max(0.3, Math.min(2.2, (rect.width - pad * 2) / w, (rect.height - pad * 2) / h));
-  svg.transition(t).call(RADIAL.zoom.transform, d3.zoomIdentity.translate(-scale * cx, -scale * cy).scale(scale));
-
-  const linkGen = d3.linkRadial().angle((d) => d.x).radius((d) => d.y);
-  RADIAL.g.select(".mm-links").selectAll("path")
-    .data(links, (l) => l.target.data.id)
-    .join((enter) => enter.append("path").attr("class", "mm-link").attr("opacity", 0).attr("d", linkGen))
-    .transition(t).attr("opacity", 1).attr("d", linkGen);
-
-  const nodeSel = RADIAL.g.select(".mm-nodes").selectAll("g.mm-node")
-    .data(nodes, (n) => n.data.id)
+  RADIAL.nodeSel = RADIAL.g.select(".mm-nodes").selectAll("g.mm-node")
+    .data(nodes, (n) => n.id)
     .join((enter) => {
-      const g = enter.append("g").attr("class", "mm-node").attr("opacity", 0);
+      const g = enter.append("g").attr("class", "mm-node");
       g.append("circle");
-      g.append("text").attr("class", "mm-label");
+      g.append("text").attr("class", "mm-label").attr("text-anchor", "middle");
+      g.append("text").attr("class", "mm-count").attr("text-anchor", "middle");
       g.append("title");
       return g;
     })
-    .classed("selected", (n) => vizSelected === n.data.id)
+    .classed("selected", (n) => vizSelected === n.id)
     .style("cursor", "pointer")
-    .on("click", (ev, n) => radialClick(n.data))
-    .on("mouseover", function () { d3.select(this).raise().select("text.mm-label").attr("fill-opacity", 1); })
-    .on("mouseout", function (ev, n) { d3.select(this).select("text.mm-label").attr("fill-opacity", n.labelShown ? 1 : 0); });
+    .call(d3.drag()
+      .on("start", (ev, d) => { if (!ev.active) RADIAL.sim.alphaTarget(0.2).restart(); d.fx = d.x; d.fy = d.y; })
+      .on("drag", (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
+      .on("end", (ev, d) => { if (!ev.active) RADIAL.sim.alphaTarget(0); if (d.id !== "root") { d.fx = null; d.fy = null; } }))
+    .on("click", (ev, d) => radialClick(d));
 
-  nodeSel.transition(t).attr("opacity", 1).attr("transform", (n) => `translate(${n.cx},${n.cy})`);
+  RADIAL.nodeSel.select("circle")
+    .attr("r", (n) => n.r)
+    .attr("fill", (n) => n.color)
+    .attr("fill-opacity", (n) => (n.kind === "bucket" || n.kind === "rest" ? 0.6 : 1));
+  RADIAL.nodeSel.select("title").text((n) => `${n.name} (${n.count})`);
+  RADIAL.nodeSel.select(".mm-label")
+    .attr("dy", (n) => n.r + 13)
+    .attr("font-size", (n) => (n.kind === "root" ? 15 : n.kind === "group" ? 13 : 11))
+    .attr("font-weight", (n) => (n.kind === "bucket" || n.kind === "rest" ? 400 : 700))
+    .text((n) => {
+      const label = (n.icon ? n.icon + " " : "") + n.name;
+      return label.length > 28 ? label.slice(0, 27) + "…" : label;
+    });
+  RADIAL.nodeSel.select(".mm-count")
+    .attr("dy", (n) => n.r + 25).attr("font-size", 10)
+    .text((n) => `${n.count}${n.hasKids ? (n.expanded ? " \u25be" : " \u25b8") : ""}`);
 
-  nodeSel.select("circle")
-    .attr("r", (n) => radialRadius(n.data, n.data.events.length))
-    .attr("fill", (n) => (n.data.kind === "root" ? "#1c2430" : nodeColor(n.data)))
-    .attr("fill-opacity", (n) => (n.data.kind === "bucket" || n.data.kind === "rest" ? 0.6 : 1));
-  nodeSel.select("title").text((n) => `${radialNorm(n.data).name} (${n.data.events.length})`);
-
-  nodeSel.select("text.mm-label").each(function (n) {
-    const d = n.data, tx = d3.select(this);
-    tx.selectAll("tspan").remove();
-    tx.attr("transform", null);
-    if (d.kind === "root") {
-      tx.attr("text-anchor", "middle").attr("x", 0).attr("dy", "-1.5em")
-        .attr("font-size", 13).attr("font-weight", 700);
-      tx.append("tspan").text("Alle Themen");
-      return;
-    }
-    const right = n.cx >= 0;
-    const r = radialRadius(d, d.events.length) + 6;
-    const label = (d.kind === "group" && d.icon ? d.icon + " " : "") + radialNorm(d).name;
-    tx.attr("text-anchor", right ? "start" : "end")
-      .attr("x", r * (right ? 1 : -1)).attr("dy", "0.32em")
-      .attr("font-size", d.kind === "group" ? 13 : d.kind === "cat" ? 11.5 : 10.5)
-      .attr("font-weight", d.kind === "group" ? 700 : d.kind === "cat" ? 600 : 400);
-    tx.append("tspan").text(label.length > 26 ? label.slice(0, 25) + "…" : label);
-    tx.append("tspan").attr("class", "mm-count").text(`  ${d.events.length}`);
-    if (d.kids && d.kids.length) {
-      tx.append("tspan").attr("class", "mm-chevron").text(RADIAL.expanded.has(d.id) ? " \u25be" : " \u25b8");
-    }
-  });
-
-  declutterRadialLabels(nodeSel, nodes);
+  RADIAL.sim.nodes(nodes);
+  RADIAL.sim.force("link").links(links);
+  RADIAL.sim.alpha(0.8).restart();
 }
 
-// Greedy-Kollisionsentzerrung: wichtige Labels (flach/groß) zuerst; überlappende
-// werden ausgeblendet und nur bei Hover gezeigt -> keine zwei sichtbaren Labels
-// überlagern sich. (Die Linien des Tidy-Trees kreuzen sich ohnehin nicht.)
-function declutterRadialLabels(nodeSel, nodes) {
-  const elById = {};
-  nodeSel.each(function (n) { elById[n.data.id] = this.querySelector("text.mm-label"); });
-  const placed = [];
-  const hit = (a, b) => a.x < b.x + b.w + 2 && a.x + a.w > b.x - 2 && a.y < b.y + b.h + 2 && a.y + a.h > b.y - 2;
-  const ordered = nodes.slice().sort((a, b) => a.depth - b.depth || b.data.events.length - a.data.events.length);
-  for (const n of ordered) {
-    const el = elById[n.data.id];
-    if (!el) continue;
-    let b; try { b = el.getBBox(); } catch { continue; }
-    const box = { x: n.cx + b.x, y: n.cy + b.y, w: b.width, h: b.height };
-    const collide = n.data.kind !== "root" && placed.some((p) => hit(box, p));
-    n.labelShown = !collide;
-    el.setAttribute("fill-opacity", collide ? 0 : 1);
-    if (!collide) placed.push(box);
-  }
+function radialTick() {
+  if (!RADIAL.linkSel) return;
+  RADIAL.linkSel
+    .attr("x1", (l) => l.source.x).attr("y1", (l) => l.source.y)
+    .attr("x2", (l) => l.target.x).attr("y2", (l) => l.target.y);
+  RADIAL.nodeSel.attr("transform", (n) => {
+    RADIAL.pos.set(n.id, { x: n.x, y: n.y });
+    return `translate(${n.x},${n.y})`;
+  });
 }
 
 function radialClick(d) {
@@ -787,13 +778,13 @@ function radialClick(d) {
       RADIAL.expanded.delete(d.id);
       hidePanel();
     } else {
-      if (d.kids && d.kids.length) RADIAL.expanded.add(d.id);
-      vizSelect(radialNorm(d));
+      if (d.hasKids) RADIAL.expanded.add(d.id);
+      vizSelect(d);
     }
     renderRadialViz();
     return;
   }
-  vizSelect(radialNorm(d));
+  vizSelect(d);
   renderRadialViz();
 }
 
