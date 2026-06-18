@@ -6,11 +6,9 @@
 let vizMode = null; // "pack" | "treemap" | "sunburst" | "tree" | "tiles"
 const VIZ_DEFAULT = "sunburst";
 const VIZ_HINTS = {
-  pack: "Blase anklicken = hineinzoomen und Veranstaltungen ansehen · Klick auf den Hintergrund = herauszoomen",
-  treemap: "Kachel anklicken = eine Ebene tiefer · Pfad oben = zurück · Blasse Kacheln sind Unterthemen mit Veranstaltungen",
   sunburst: "Segment anklicken = hineinzoomen und Veranstaltungen ansehen · Klick auf die Mitte = zurück",
-  tree: "Thema anklicken = aufklappen · Unterthema anklicken = Veranstaltungen ansehen · gestrichelte Linien = thematische Überschneidung",
-  tiles: "Karte anklicken = eine Ebene tiefer bzw. Veranstaltungen ansehen · Pfad oben = zurück",
+  treemap: "Kachel anklicken = eine Ebene tiefer · Pfad oben = zurück · Blasse Kacheln sind Unterthemen mit Veranstaltungen",
+  radial: "Knoten anklicken = in alle Richtungen aufklappen · Unterthema anklicken = Veranstaltungen ansehen · ziehen/scrollen zum Navigieren",
 };
 
 let vizSelected = null;   // Id des ausgewählten Knotens (Panel offen)
@@ -155,10 +153,12 @@ function renderMindmap() {
     svg.on(".zoom", null).on("click", null);
     svg.selectAll("*").remove();
     TREE.inited = false;
+    if (RADIAL.sim) RADIAL.sim.stop();
+    RADIAL.inited = false;
+    RADIAL.linkSel = RADIAL.nodeSel = null;
     svgModeReady = vizMode;
   }
-  ({ pack: renderPackViz, treemap: renderTreemapViz, sunburst: renderSunburstViz,
-     tree: renderTreeViz, tiles: renderTilesViz })[vizMode]();
+  ({ sunburst: renderSunburstViz, treemap: renderTreemapViz, radial: renderRadialViz })[vizMode]();
 }
 
 function vizClearSelection() {
@@ -502,10 +502,11 @@ function initTreeViz() {
   TREE.centered = false;
 }
 
-function pruneForTree(node) {
+// Baum auf die im jeweiligen View aufgeklappten Knoten reduzieren
+function pruneTree(node, expanded) {
   const copy = { ...node, name: vizLabel(node), kids: node.children || [] };
-  copy.children = (node.kind === "root" || TREE.expanded.has(node.id)) && node.children
-    ? node.children.map(pruneForTree)
+  copy.children = (node.kind === "root" || expanded.has(node.id)) && node.children
+    ? node.children.map((c) => pruneTree(c, expanded))
     : null;
   return copy;
 }
@@ -523,7 +524,7 @@ function renderTreeViz() {
   const rect = $("#mindmap-view").getBoundingClientRect();
   svg.attr("viewBox", [0, 0, rect.width, rect.height]);
 
-  const root = d3.hierarchy(pruneForTree(buildExploreTree()));
+  const root = d3.hierarchy(pruneTree(buildExploreTree(), TREE.expanded));
   d3.tree().nodeSize([MM_ROW, MM_COL])(root);
   const nodes = root.descendants().filter((d) => d.depth > 0);
   const links = root.links().filter((l) => l.source.depth > 0);
@@ -550,23 +551,6 @@ function renderTreeViz() {
     .transition(t)
     .attr("opacity", 1)
     .attr("d", (l) => treeLinkPath(l.source, l.target));
-
-  // Querverbindungen: gleiches Unterthema unter verschiedenen Kategorien
-  const byBid = {};
-  for (const n of nodes) if (n.data.kind === "bucket") (byBid[n.data.bid] ??= []).push(n);
-  const cross = [];
-  for (const group of Object.values(byBid)) {
-    group.sort((a, b) => a.py - b.py);
-    for (let i = 0; i < group.length - 1; i++) cross.push([group[i], group[i + 1]]);
-  }
-  TREE.g.select(".mm-cross").selectAll("path")
-    .data(cross, (c) => `${c[0].data.id}|${c[1].data.id}`)
-    .join("path")
-    .attr("class", "mm-link--cross")
-    .attr("d", (c) => {
-      const bow = Math.max(c[0].px, c[1].px) + 170;
-      return `M${c[0].px},${c[0].py} C${bow},${c[0].py} ${bow},${c[1].py} ${c[1].px},${c[1].py}`;
-    });
 
   const nodeSel = TREE.g.select(".mm-nodes").selectAll("g.mm-node")
     .data(nodes, (n) => n.data.id)
@@ -620,9 +604,12 @@ function treeClick(d) {
     if (TREE.expanded.has(d.id)) {
       TREE.expanded.delete(d.id);
       for (const kid of d.kids) TREE.expanded.delete(kid.id);
-      if (vizSelected?.startsWith("c:") || vizSelected?.startsWith("b:")) hidePanel();
+      hidePanel();
     } else {
+      // Akkordeon: nur ein Zweig offen -> übrige Gruppen/Kategorien zuklappen
+      TREE.expanded.clear();
       TREE.expanded.add(d.id);
+      hidePanel();
     }
     renderTreeViz();
     return;
@@ -632,6 +619,10 @@ function treeClick(d) {
       TREE.expanded.delete(d.id);
       hidePanel();
     } else {
+      // Geschwister-Kategorien derselben Gruppe zuklappen
+      for (const c of CAT_GROUPS[d.gid]?.cats || []) {
+        if (`c:${c}` !== d.id) TREE.expanded.delete(`c:${c}`);
+      }
       if (d.kids.length) TREE.expanded.add(d.id);
       vizSelect(d);
     }
@@ -643,7 +634,162 @@ function treeClick(d) {
 }
 
 /* ====================================================================
-   5) Kachel-Browser (ohne Chart)
+   5) Radiale Mindmap – klappt in alle Richtungen auf
+==================================================================== */
+
+const RADIAL = {
+  inited: false, g: null, zoom: null, sim: null,
+  linkSel: null, nodeSel: null,
+  expanded: new Set(), pos: new Map(),
+};
+
+function initRadialViz() {
+  const svg = d3.select("#mindmap");
+  RADIAL.g = svg.append("g");
+  RADIAL.g.append("g").attr("class", "mm-links");
+  RADIAL.g.append("g").attr("class", "mm-nodes");
+  RADIAL.zoom = d3.zoom().scaleExtent([0.25, 2.5])
+    .on("zoom", (ev) => RADIAL.g.attr("transform", ev.transform));
+  svg.call(RADIAL.zoom);
+  RADIAL.sim = d3.forceSimulation()
+    .force("link", d3.forceLink().id((d) => d.id).distance((l) => l.dist).strength((l) => l.dist < 90 ? 0.7 : 0.5))
+    .force("charge", d3.forceManyBody().strength(-340))
+    .force("collide", d3.forceCollide().radius((d) => d.r + 30).iterations(2))
+    .force("x", d3.forceX(0).strength(0.045))
+    .force("y", d3.forceY(0).strength(0.05))
+    .on("tick", radialTick);
+  RADIAL.inited = true;
+}
+
+// Sichtbaren Baum (Wurzel -> aufgeklappte Gruppen/Kategorien/Unterthemen)
+// in eine flache Knoten-/Kantenliste für die Force-Mindmap umwandeln.
+function radialGraph() {
+  const tree = pruneTree(buildExploreTree(), RADIAL.expanded);
+  const nodes = [], links = [];
+  const walk = (node, parentId) => {
+    const n = node.events.length;
+    const r = node.kind === "root" ? 30
+      : node.kind === "group" ? 13 + Math.sqrt(n) * 0.22
+      : node.kind === "cat" ? Math.min(15, 7 + Math.sqrt(n) * 0.45)
+      : Math.min(11, 5 + Math.sqrt(n) * 0.5);
+    const name = node.kind === "root" ? "Alle Themen"
+      : node.kind === "group" ? CAT_GROUPS[node.gid].name : node.name;
+    nodes.push({
+      id: node.id, kind: node.kind, gid: node.gid, cid: node.cid, bid: node.bid,
+      name, icon: node.icon, events: node.events, count: n, r,
+      hasKids: !!(node.kids && node.kids.length),
+      expanded: RADIAL.expanded.has(node.id),
+      color: node.kind === "root" ? "#1c2430" : nodeColor(node),
+    });
+    if (parentId) {
+      links.push({ source: parentId, target: node.id,
+        dist: node.kind === "group" ? 150 : node.kind === "cat" ? 95 : 70 });
+    }
+    if (node.children) for (const c of node.children) walk(c, node.id);
+  };
+  walk(tree, null);
+  return { nodes, links };
+}
+
+function renderRadialViz() {
+  if (!RADIAL.inited) initRadialViz();
+  const svg = d3.select("#mindmap");
+  const rect = $("#mindmap-view").getBoundingClientRect();
+  if (!rect.width) return;
+  svg.attr("viewBox", [-rect.width / 2, -rect.height / 2, rect.width, rect.height]);
+
+  const { nodes, links } = radialGraph();
+  for (const n of nodes) {
+    const p = RADIAL.pos.get(n.id);
+    if (p) { n.x = p.x; n.y = p.y; }
+    if (n.id === "root") { n.fx = 0; n.fy = 0; }
+  }
+
+  RADIAL.linkSel = RADIAL.g.select(".mm-links").selectAll("line")
+    .data(links, (l) => `${l.source.id || l.source}->${l.target.id || l.target}`)
+    .join("line").attr("class", "mm-link");
+
+  RADIAL.nodeSel = RADIAL.g.select(".mm-nodes").selectAll("g.mm-node")
+    .data(nodes, (n) => n.id)
+    .join((enter) => {
+      const g = enter.append("g").attr("class", "mm-node");
+      g.append("circle");
+      g.append("text").attr("class", "mm-label").attr("text-anchor", "middle");
+      g.append("text").attr("class", "mm-count").attr("text-anchor", "middle");
+      g.append("title");
+      return g;
+    })
+    .classed("selected", (n) => vizSelected === n.id)
+    .style("cursor", "pointer")
+    .call(d3.drag()
+      .on("start", (ev, d) => { if (!ev.active) RADIAL.sim.alphaTarget(0.2).restart(); d.fx = d.x; d.fy = d.y; })
+      .on("drag", (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
+      .on("end", (ev, d) => { if (!ev.active) RADIAL.sim.alphaTarget(0); if (d.id !== "root") { d.fx = null; d.fy = null; } }))
+    .on("click", (ev, d) => radialClick(d));
+
+  RADIAL.nodeSel.select("circle")
+    .attr("r", (n) => n.r)
+    .attr("fill", (n) => n.color)
+    .attr("fill-opacity", (n) => (n.kind === "bucket" || n.kind === "rest" ? 0.6 : 1));
+  RADIAL.nodeSel.select("title").text((n) => `${n.name} (${n.count})`);
+  RADIAL.nodeSel.select(".mm-label")
+    .attr("dy", (n) => n.r + 13)
+    .attr("font-size", (n) => (n.kind === "root" ? 15 : n.kind === "group" ? 13 : 11))
+    .attr("font-weight", (n) => (n.kind === "bucket" || n.kind === "rest" ? 400 : 700))
+    .text((n) => {
+      const label = (n.icon ? n.icon + " " : "") + n.name;
+      return label.length > 28 ? label.slice(0, 27) + "…" : label;
+    });
+  RADIAL.nodeSel.select(".mm-count")
+    .attr("dy", (n) => n.r + 25).attr("font-size", 10)
+    .text((n) => `${n.count}${n.hasKids ? (n.expanded ? " \u25be" : " \u25b8") : ""}`);
+
+  RADIAL.sim.nodes(nodes);
+  RADIAL.sim.force("link").links(links);
+  RADIAL.sim.alpha(0.8).restart();
+}
+
+function radialTick() {
+  if (!RADIAL.linkSel) return;
+  RADIAL.linkSel
+    .attr("x1", (l) => l.source.x).attr("y1", (l) => l.source.y)
+    .attr("x2", (l) => l.target.x).attr("y2", (l) => l.target.y);
+  RADIAL.nodeSel.attr("transform", (n) => {
+    RADIAL.pos.set(n.id, { x: n.x, y: n.y });
+    return `translate(${n.x},${n.y})`;
+  });
+}
+
+function radialClick(d) {
+  if (d.kind === "root") return;
+  if (d.kind === "group") {
+    if (RADIAL.expanded.has(d.id)) {
+      RADIAL.expanded.delete(d.id);
+      for (const c of CAT_GROUPS[d.gid]?.cats || []) RADIAL.expanded.delete(`c:${c}`);
+      hidePanel();
+    } else {
+      RADIAL.expanded.add(d.id);
+    }
+    renderRadialViz();
+    return;
+  }
+  if (d.kind === "cat") {
+    if (vizSelected === d.id && RADIAL.expanded.has(d.id)) {
+      RADIAL.expanded.delete(d.id);
+      hidePanel();
+    } else {
+      if (d.hasKids) RADIAL.expanded.add(d.id);
+      vizSelect(d);
+    }
+    renderRadialViz();
+    return;
+  }
+  vizSelect(d);
+  renderRadialViz();
+}
+
+/* ====================================================================
+   6) Kachel-Browser (ohne Chart)
 ==================================================================== */
 
 function renderTilesViz() {

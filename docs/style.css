@@ -204,15 +204,15 @@ button.badge { font: inherit; cursor: pointer; }
 .empty { text-align: center; color: var(--muted); padding: 40px 10px; }
 
 /* ---------- Karte / Popups ---------- */
-/* Hauchdünne Linien zwischen Kacheln auf HiDPI-Displays vermeiden:
-   Kacheln behalten ihre echte Größe (kein Skalieren/Antialiasing), jede
-   Kachel bekommt einen eigenen GPU-Layer für pixelgenaues Compositing,
-   und der Karten-Hintergrund ist neutral statt weiß. */
+/* Weiße Linien zwischen Kacheln auf Displays mit fraktionalem Pixel-
+   verhältnis (Retina, Windows 125/150 %) entstehen durch Sub-Pixel-Lücken.
+   1 px Kachel-Überlappung schließt diese Lücken zuverlässig; der neutrale
+   Hintergrund kaschiert eventuelle Reste. */
 .leaflet-container { background: #dfe1e5; }
 .leaflet-tile {
+  width: 257px !important;
+  height: 257px !important;
   box-sizing: content-box;
-  will-change: transform;
-  backface-visibility: hidden;
 }
 .leaflet-popup-content { margin: 10px 14px; max-height: 260px; overflow-y: auto; }
 .popup-event { padding: 6px 0; border-bottom: 1px solid var(--border); }
@@ -328,7 +328,11 @@ body[data-view="mm"] #map, body[data-view="mm"] .results { display: none; }
 .mm-node circle { stroke: #fff; stroke-width: 1.5px; transition: stroke .12s; }
 .mm-node.selected circle { stroke: var(--text); stroke-width: 2.5px; }
 .mm-node:hover text.mm-label { fill: var(--accent); }
-.mm-node text { font-family: inherit; fill: var(--text); }
+.mm-node text {
+  font-family: inherit; fill: var(--text);
+  /* heller Halo, damit Labels über Linien/Überschneidungen lesbar bleiben */
+  paint-order: stroke; stroke: #fcfcfd; stroke-width: 3px; stroke-linejoin: round;
+}
 .mm-node .mm-count { fill: var(--muted); font-weight: 400; }
 .mm-node .mm-chevron { fill: var(--muted); font-weight: 400; }
 .mm-link { stroke: #c6ccd4; stroke-opacity: .8; fill: none; stroke-width: 1.4px; }
@@ -393,10 +397,14 @@ body[data-view="swipe"] #swipe-view {
 }
 .swipe-card.top:active { cursor: grabbing; }
 .swipe-card:not(.top) { transform: scale(.94) translateY(12px); opacity: .6; }
-.swipe-card h2 { margin: 0; font-size: 1.3rem; line-height: 1.3; }
-.sw-badges { display: flex; flex-wrap: wrap; gap: 6px; }
-.sw-org { color: var(--text); font-size: .95rem; }
-.sw-links { margin-top: auto; display: flex; flex-wrap: wrap; gap: 12px; font-size: .9rem; }
+/* Titel auf max. 4 Zeilen begrenzen, damit Veranstalter + Links immer Platz haben */
+.swipe-card h2 {
+  margin: 0; font-size: 1.3rem; line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+}
+.sw-badges { display: flex; flex-wrap: wrap; gap: 6px; flex: none; }
+.sw-org { color: var(--text); font-size: .95rem; flex: none; }
+.sw-links { margin-top: auto; display: flex; flex-wrap: wrap; gap: 12px; font-size: .9rem; flex: none; }
 .sw-links a { color: var(--accent); text-decoration: none; }
 .sw-links a:hover { text-decoration: underline; }
 .sw-stamp {
