@@ -204,15 +204,10 @@ button.badge { font: inherit; cursor: pointer; }
 .empty { text-align: center; color: var(--muted); padding: 40px 10px; }
 
 /* ---------- Karte / Popups ---------- */
-/* Weiße Linien zwischen Kacheln auf Displays mit fraktionalem Pixel-
-   verhältnis (Retina, Windows 125/150 %) entstehen durch Sub-Pixel-Lücken.
-   1 px Kachel-Überlappung schließt diese Lücken zuverlässig; der neutrale
-   Hintergrund kaschiert eventuelle Reste. */
+/* Der neutrale Hintergrund kaschiert eventuelle Sub-Pixel-Lücken bei fraktionalem Zoom. */
 .leaflet-container { background: #dfe1e5; }
 .leaflet-tile {
-  width: 257px !important;
-  height: 257px !important;
-  box-sizing: content-box;
+  outline: 1px solid transparent;
 }
 .leaflet-popup-content { margin: 10px 14px; max-height: 260px; overflow-y: auto; }
 .popup-event { padding: 6px 0; border-bottom: 1px solid var(--border); }

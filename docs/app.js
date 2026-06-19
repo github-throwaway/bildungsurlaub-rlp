@@ -68,7 +68,7 @@ function initMap() {
   const locate = L.control({ position: "topleft" });
   locate.onAdd = () => {
     const div = L.DomUtil.create("div", "leaflet-bar locate-ctrl");
-    div.innerHTML = '<a href="#" title="Meinen Standort anzeigen" role="button">📍</a>';
+    div.innerHTML = `<a href="#" title="Meinen Standort anzeigen" role="button" style="display:flex;align-items:center;justify-content:center;color:#444;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="3.5" fill="currentColor"/><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 0v4M12 20v4M0 12h4M20 12h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></a>`;
     L.DomEvent.on(div, "click", (e) => {
       L.DomEvent.stop(e);
       div.classList.add("locating");
@@ -84,8 +84,9 @@ function initMap() {
     if (meMarker) map.removeLayer(meMarker);
     meMarker = L.layerGroup([
       L.circle(e.latlng, { radius: e.accuracy, color: "#2563eb", weight: 1, fillOpacity: 0.1 }),
+      L.circleMarker(e.latlng, { radius: 16, color: "transparent", fillColor: "#2563eb", fillOpacity: 0.2 }),
       L.circleMarker(e.latlng, { radius: 7, color: "#fff", weight: 2, fillColor: "#2563eb", fillOpacity: 1 })
-        .bindPopup("Dein Standort"),
+        .bindPopup("Dein Standort")
     ]).addTo(map);
   });
   map.on("locationerror", () => {
