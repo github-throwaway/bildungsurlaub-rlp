@@ -177,10 +177,16 @@ def parse_organizer(row) -> dict:
     # cols[0] = Label "Veranstalter:", cols[1] = Name/Adresse, cols[2] = Kontakt
     org = {"name": "", "address": "", "tel": "", "web": "", "mail": ""}
     if len(cols) > 1:
-        lines = [clean(t) for t in cols[1].get_text("\n").split("\n") if clean(t)]
-        if lines:
-            org["name"] = lines[0]
-            org["address"] = ", ".join(lines[1:])
+        # Quelle trennt Name und Adresse durch ein doppeltes <br>; der Name selbst
+        # kann über mehrere Quellzeilen umgebrochen sein. <br> in echte Umbrüche
+        # wandeln und am ersten Leerzeilen-Block (Name | Adresse) auftrennen.
+        for br in cols[1].find_all("br"):
+            br.replace_with("\n")
+        blocks = re.split(r"\n\s*\n", cols[1].get_text().strip())
+        if blocks:
+            org["name"] = clean(blocks[0])
+            addr_lines = [clean(t) for t in "\n".join(blocks[1:]).split("\n")]
+            org["address"] = ", ".join(t for t in addr_lines if t)
     if len(cols) > 2:
         contact = cols[2]
         text = contact.get_text(" ")
